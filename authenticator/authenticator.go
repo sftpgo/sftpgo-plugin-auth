@@ -17,6 +17,7 @@ package authenticator
 import (
 	"crypto/tls"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/sftpgo/sdk"
@@ -52,9 +53,9 @@ func NewAuthenticator(dialURL, baseDN, username, password string, startTLS int, 
 		SearchQuery:           searchQuery,
 		GroupAttributes:       groupAttributes,
 		BaseDir:               baseDir,
-		PrimaryGroupPrefix:    primaryGroupPrefix,
-		SecondaryGroupPrefix:  secondaryGroupPrefix,
-		MembershipGroupPrefix: membershipGroupPrefix,
+		PrimaryGroupPrefix:    strings.ToLower(primaryGroupPrefix),
+		SecondaryGroupPrefix:  strings.ToLower(secondaryGroupPrefix),
+		MembershipGroupPrefix: strings.ToLower(membershipGroupPrefix),
 		RequireGroups:         requiresGroup,
 		tlsConfig:             tlsConfig,
 	}

@@ -38,6 +38,7 @@ OPTIONS:
 As you can see from the above usage, you can customize the search query and LDAP attributes containing group membership.
 The plugin returns a minimal SFTPGo user after successful authentication.
 You can use the SFTPGo group feature to customize your users, also the plugin tries to preserve the changes made to users from SFTPGo's WebAdmin UI.
+Groups are always matched in lower case.
 
 Password and keyboard interactive authentication methods are supported.
 SFTPGo users can add their public key and configure two-factor authentication from the SFTPGo WebClient UI.
