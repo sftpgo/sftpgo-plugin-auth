@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  GO_VERSION: '1.20'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get install -q -y osslsigncode
+          go install github.com/tc-hib/go-winres@latest
+
+          GIT_COMMIT=`git describe --always --dirty`
+          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
+          NUM_COMMITS_FROM_TAG=$(git rev-list ${LATEST_TAG}.. --count)
+          VERSION=$(echo "${LATEST_TAG}" | awk -F. -v OFS=. '{$NF++;print}')-dev.${NUM_COMMITS_FROM_TAG}
+          FILE_VERSION=${LATEST_TAG:1}.${NUM_COMMITS_FROM_TAG}
+
+          mkdir bin
+          go-winres simply --arch amd64 --product-version $VERSION-$GIT_COMMIT --file-version $FILE_VERSION --file-description "SFTPGo plugin auth" --product-name "SFTPGo plugin auth" --copyright "AGPL-3.0" --original-filename sftpgo-plugin-auth-windows-x86_64.exe --icon res/icon.ico
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o sftpgo-plugin-auth-windows-x86_64.exe
+          go-winres simply --arch arm64 --product-version $VERSION-$GIT_COMMIT --file-version $FILE_VERSION --file-description "SFTPGo plugin auth" --product-name "SFTPGo plugin auth" --copyright "AGPL-3.0" --original-filename sftpgo-plugin-auth-windows-arm64.exe --icon res/icon.ico
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o sftpgo-plugin-auth-windows-arm64.exe
+          go-winres simply --arch 386 --product-version $VERSION-$GIT_COMMIT --file-version $FILE_VERSION --file-description "SFTPGo plugin auth" --product-name "SFTPGo plugin auth" --copyright "AGPL-3.0" --original-filename sftpgo-plugin-auth-windows-x86.exe --icon res/icon.ico
+          CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o sftpgo-plugin-auth-windows-x86.exe
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            mv sftpgo-plugin-auth-windows-x86_64.exe bin/
+            mv sftpgo-plugin-auth-windows-arm64.exe bin/
+            mv sftpgo-plugin-auth-windows-x86.exe bin/
+          else
+            echo $CERT_DATA | base64 --decode > cert.pfx
+            osslsigncode sign -pkcs12 cert.pfx -pass $CERT_PASS -n "SFTPGo plugin auth" -i "https://github.com/sftpgo/sftpgo-plugin-auth" -ts "http://timestamp.sectigo.com" -h sha2 -in sftpgo-plugin-auth-windows-x86_64.exe -out bin/sftpgo-plugin-auth-windows-x86_64.exe
+            osslsigncode sign -pkcs12 cert.pfx -pass $CERT_PASS -n "SFTPGo plugin auth" -i "https://github.com/sftpgo/sftpgo-plugin-auth" -ts "http://timestamp.sectigo.com" -h sha2 -in sftpgo-plugin-auth-windows-arm64.exe -out bin/sftpgo-plugin-auth-windows-arm64.exe
+            osslsigncode sign -pkcs12 cert.pfx -pass $CERT_PASS -n "SFTPGo plugin auth" -i "https://github.com/sftpgo/sftpgo-plugin-auth" -ts "http://timestamp.sectigo.com" -h sha2 -in sftpgo-plugin-auth-windows-x86.exe -out bin/sftpgo-plugin-auth-windows-x86.exe
+            rm -f cert.pfx
+          fi
+
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-linux-amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-linux-arm64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-linux-armv7
+          CGO_ENABLED=0 GOOS=linux GOARCH=ppc64le go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-linux-ppc64le
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-darwin-amd64
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-darwin-arm64
+        shell: bash
+        env:
+          CERT_DATA: ${{ secrets.CERT_DATA }}
+          CERT_PASS: ${{ secrets.CERT_PASS }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: sftpgo-plugin-auth
+          path: bin
+
+  test:
+    name: Run test cases
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+
+      - name: Run tests
+        run: |
+          curl -L https://github.com/glauth/glauth/releases/latest/download/glauth-linux-amd64 --output "test/glauth-linux-amd64"
+          cd test && chmod 755 glauth-linux-amd64 && ./glauth-linux-amd64 -c glauth.cfg &
+          sleep 5
+          go test -v -p 1 -timeout 5m ./... -covermode=atomic
+          killall -TERM glauth-linux-amd64 || true
+
+  golangci-lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+      - uses: actions/checkout@v3
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
