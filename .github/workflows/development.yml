@@ -30,8 +30,15 @@ jobs:
           go install github.com/tc-hib/go-winres@latest
 
           GIT_COMMIT=`git describe --always --dirty`
-          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
-          NUM_COMMITS_FROM_TAG=$(git rev-list ${LATEST_TAG}.. --count)
+          HAS_TAGS=$(git tag -l | head -1)
+          if [ -z ${HAS_TAGS} ]
+          then
+            LATEST_TAG=v0.0.0
+            NUM_COMMITS_FROM_TAG=$(git rev-list --all | wc -l)
+          else
+            LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
+            NUM_COMMITS_FROM_TAG=$(git rev-list ${LATEST_TAG}.. --count)
+          fi
           VERSION=$(echo "${LATEST_TAG}" | awk -F. -v OFS=. '{$NF++;print}')-dev.${NUM_COMMITS_FROM_TAG}
           FILE_VERSION=${LATEST_TAG:1}.${NUM_COMMITS_FROM_TAG}
 

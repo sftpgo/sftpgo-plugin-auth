@@ -45,53 +45,6 @@ jobs:
           osslsigncode sign -pkcs12 cert.pfx -pass $CERT_PASS -n "SFTPGo plugin auth" -i "https://github.com/sftpgo/sftpgo-plugin-auth" -ts "http://timestamp.sectigo.com" -h sha2 -in sftpgo-plugin-auth-windows-x86.exe -out bin/sftpgo-plugin-auth-windows-x86.exe
           rm -f cert.pfx *.exe *.syso
 
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build name: Release
-
-on:
-  push:
-    tags: 'v*'
-
-env:
-  GO_VERSION: 1.20.5
-
-jobs:
-  build:
-    name: Build and Release
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Build
-        run: |
-          sudo apt-get update -q -y
-          sudo apt-get install -q -y osslsigncode
-          go install github.com/tc-hib/go-winres@latest
-
-          VERSION=${GITHUB_REF/refs\/tags\//}
-          GIT_COMMIT=`git describe --always --dirty`
-          FILE_VERSION=${VERSION:1}.0
-
-          mkdir bin
-          go-winres simply --arch amd64 --product-version $VERSION-$GIT_COMMIT --file-version $FILE_VERSION --file-description "SFTPGo plugin auth" --product-name "SFTPGo plugin auth" --copyright "AGPL-3.0" --original-filename sftpgo-plugin-auth-windows-x86_64.exe --icon res/icon.ico
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o sftpgo-plugin-auth-windows-x86_64.exe
-          go-winres simply --arch arm64 --product-version $VERSION-$GIT_COMMIT --file-version $FILE_VERSION --file-description "SFTPGo plugin auth" --product-name "SFTPGo plugin auth" --copyright "AGPL-3.0" --original-filename sftpgo-plugin-auth-windows-arm64.exe --icon res/icon.ico
-          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o sftpgo-plugin-auth-windows-arm64.exe
-          go-winres simply --arch 386 --product-version $VERSION-$GIT_COMMIT --file-version $FILE_VERSION --file-description "SFTPGo plugin auth" --product-name "SFTPGo plugin auth" --copyright "AGPL-3.0" --original-filename sftpgo-plugin-auth-windows-x86.exe --icon res/icon.ico
-          CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o sftpgo-plugin-auth-windows-x86.exe
-          echo $CERT_DATA | base64 --decode > cert.pfx
-          osslsigncode sign -pkcs12 cert.pfx -pass $CERT_PASS -n "SFTPGo plugin auth" -i "https://github.com/sftpgo/sftpgo-plugin-auth" -ts "http://timestamp.sectigo.com" -h sha2 -in sftpgo-plugin-auth-windows-x86_64.exe -out bin/sftpgo-plugin-auth-windows-x86_64.exe
-          osslsigncode sign -pkcs12 cert.pfx -pass $CERT_PASS -n "SFTPGo plugin auth" -i "https://github.com/sftpgo/sftpgo-plugin-auth" -ts "http://timestamp.sectigo.com" -h sha2 -in sftpgo-plugin-auth-windows-arm64.exe -out bin/sftpgo-plugin-auth-windows-arm64.exe
-          osslsigncode sign -pkcs12 cert.pfx -pass $CERT_PASS -n "SFTPGo plugin auth" -i "https://github.com/sftpgo/sftpgo-plugin-auth" -ts "http://timestamp.sectigo.com" -h sha2 -in sftpgo-plugin-auth-windows-x86.exe -out bin/sftpgo-plugin-auth-windows-x86.exe
-          rm -f cert.pfx *.exe *.syso
-
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-linux-amd64
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-linux-arm64
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-linux-armv7
