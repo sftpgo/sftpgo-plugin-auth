@@ -7,7 +7,7 @@ This plugin enables LDAP/Active Directory authentication for SFTPGo.
 
 ## Configuration
 
-The plugin can be configured within the `plugins` section of the SFTPGo configuration file. To start the plugin you have to use the `serve` subcommand. Here is the usage.
+The plugin can be configured within the `plugins` section of the SFTPGo configuration file or (recommended) using environment variables. To start the plugin you have to use the `serve` subcommand. Here is the usage.
 
 ```shell
 NAME:
@@ -19,7 +19,7 @@ USAGE:
 OPTIONS:
    --ldap-url value                                                 LDAP url, e.g ldap://192.168.1.5:389 or ldaps://192.168.1.5:636 [$SFTPGO_PLUGIN_AUTH_LDAP_URL]
    --ldap-base-dn value                                             The base DN defines the address of the root object in the LDAP directory, e.g dc=mylab,dc=local [$SFTPGO_PLUGIN_AUTH_LDAP_BASE_DN]
-   --ldap-bind-dn value                                             The bind DN used to log in at the LDAP server in order to perform searches, e.g cn=Administrator,cn=users,dc=mylab,dc=local. This should be a read-oly user [$SFTPGO_PLUGIN_AUTH_LDAP_USERNAME]
+   --ldap-bind-dn value                                             The bind DN used to log in at the LDAP server in order to perform searches, e.g cn=Administrator,cn=users,dc=mylab,dc=local. This should be a read-oly user [$SFTPGO_PLUGIN_AUTH_LDAP_USERNAME, $SFTPGO_PLUGIN_AUTH_LDAP_BIND_DN]
    --ldap-password value                                            The password for the defined ldap-bind-dn. If empty an anonymous bind will be attempted [$SFTPGO_PLUGIN_AUTH_LDAP_PASSWORD]
    --ldap-search-query value                                        The ldap query to use to find users attempting to login. The %username% placeholder will be replaced with the username attempting to log in (default: (&(objectClass=user)(sAMAccountType=805306368)(sAMAccountName=%username%))) [$SFTPGO_PLUGIN_AUTH_LDAP_SEARCH_QUERY]
    --ldap-group-attributes value [ --ldap-group-attributes value ]  The ldap attributes containing the groups the users are members of (default: memberOf) [$SFTPGO_PLUGIN_AUTH_LDAP_GROUP_ATTRIBUTES]
@@ -42,3 +42,20 @@ Groups are always matched in lower case.
 
 Password and keyboard interactive authentication methods are supported.
 SFTPGo users can add their public key and configure two-factor authentication from the SFTPGo WebClient UI.
+
+Here is an example configuration using environment variables.
+
+```text
+SFTPGO_PLUGIN_AUTH_LDAP_URL="ldap://192.168.1.5:389"
+SFTPGO_PLUGIN_AUTH_LDAP_BASE_DN="dc=mylab,dc=local"
+SFTPGO_PLUGIN_AUTH_LDAP_USERNAME="cn=Administrator,cn=users,dc=mylab,dc=local"
+SFTPGO_PLUGIN_AUTH_LDAP_PASSWORD="Password.123456"
+SFTPGO_PLUGIN_AUTH_LDAP_SEARCH_QUERY="(&(objectClass=user)(sAMAccountType=805306368)(sAMAccountName=%username%))"
+SFTPGO_PLUGIN_AUTH_LDAP_GROUP_ATTRIBUTES="memberOf"
+SFTPGO_PLUGIN_AUTH_CACHE_TIME=60
+SFTPGO_PLUGINS__0__TYPE=auth
+SFTPGO_PLUGINS__0__AUTH_OPTIONS__SCOPE=5
+SFTPGO_PLUGINS__0__CMD="/usr/local/bin/sftpgo-plugin-auth"
+SFTPGO_PLUGINS__0__ARGS="serve"
+SFTPGO_PLUGINS__0__AUTO_MTLS=1
+```

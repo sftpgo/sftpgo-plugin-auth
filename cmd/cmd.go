@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	version   = "1.0.0"
+	version   = "1.0.0-dev"
 	envPrefix = "SFTPGO_PLUGIN_AUTH_"
 )
 
@@ -91,7 +91,7 @@ var (
 						Name:        "ldap-bind-dn",
 						Usage:       "The bind DN used to log in at the LDAP server in order to perform searches, e.g cn=Administrator,cn=users,dc=mylab,dc=local. This should be a read-oly user",
 						Destination: &ldapUsername,
-						EnvVars:     []string{envPrefix + "LDAP_USERNAME"},
+						EnvVars:     []string{envPrefix + "LDAP_USERNAME", envPrefix + "LDAP_BIND_DN"},
 					},
 					&cli.StringFlag{
 						Name:        "ldap-password",
