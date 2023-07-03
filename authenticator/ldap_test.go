@@ -95,6 +95,9 @@ func TestLDAPAuthenticator(t *testing.T) {
 	require.Equal(t, 1, user.Status)
 	require.Equal(t, filepath.Join(baseDir, user1), user.HomeDir)
 	require.Len(t, user.Groups, 2)
+	// empty password
+	_, err = auth.CheckUserAndPass(user1, "", "", "", nil)
+	require.ErrorIs(t, err, errInvalidCredentials)
 	// error from cache
 	_, err = auth.CheckUserAndPass(user1, "wrong", "", "", nil)
 	require.ErrorIs(t, err, errInvalidCredentials)
@@ -125,6 +128,9 @@ func TestLDAPAuthenticator(t *testing.T) {
 	require.Equal(t, 1, res)
 	// wrong password
 	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{"wrong"}, nil, 2)
+	require.ErrorIs(t, err, errInvalidCredentials)
+	// empty password
+	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{""}, nil, 2)
 	require.ErrorIs(t, err, errInvalidCredentials)
 	found := cache.Has(user1)
 	require.True(t, found)

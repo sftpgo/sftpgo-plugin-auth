@@ -77,6 +77,9 @@ func (a *LDAPAuthenticator) validate() error {
 }
 
 func (a *LDAPAuthenticator) CheckUserAndPass(username, password, _, _ string, userAsJSON []byte) ([]byte, error) {
+	if password == "" {
+		return nil, errInvalidCredentials
+	}
 	if cache != nil {
 		found, match := cache.Check(username, password)
 		if found {
@@ -144,6 +147,9 @@ func (a *LDAPAuthenticator) SendKeyboardAuthRequest(requestID, username, _, _ st
 			return "", nil, nil, 0, 0, fmt.Errorf("unexpected number of answers: %d", len(answers))
 		}
 		password := answers[0]
+		if password == "" {
+			return "", nil, nil, 0, 0, errInvalidCredentials
+		}
 		if cache != nil {
 			found, match := cache.Check(username, password)
 			if found {
