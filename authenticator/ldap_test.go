@@ -242,6 +242,11 @@ func TestValidation(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "users base dir must be an absolute path")
 	a.BaseDir = filepath.Clean(os.TempDir())
+	a.PrimaryGroupPrefix = "group_"
+	err = a.validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "group attributes not set, group prefixes are ineffective")
+	a.PrimaryGroupPrefix = ""
 	a.RequireGroups = true
 	err = a.validate()
 	require.Error(t, err)
@@ -271,7 +276,10 @@ func TestUserToUpdate(t *testing.T) {
 			ID: 1,
 		},
 	}
-	a := LDAPAuthenticator{}
+	a := LDAPAuthenticator{
+		GroupAttributes:    []string{"memberOf"},
+		PrimaryGroupPrefix: "sftpgo_primary",
+	}
 	res := a.isUserToUpdate(u, nil)
 	require.True(t, res)
 	u.Password = password
@@ -297,6 +305,15 @@ func TestUserToUpdate(t *testing.T) {
 	require.True(t, res)
 	u.Groups = groups
 	res = a.isUserToUpdate(u, groups)
+	require.False(t, res)
+	res = a.isUserToUpdate(u, nil)
+	require.True(t, res)
+	a.GroupAttributes = nil
+	res = a.isUserToUpdate(u, nil)
+	require.False(t, res)
+	a.GroupAttributes = []string{"attr"}
+	a.PrimaryGroupPrefix = ""
+	res = a.isUserToUpdate(u, nil)
 	require.False(t, res)
 }
 

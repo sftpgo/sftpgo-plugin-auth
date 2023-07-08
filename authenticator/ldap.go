@@ -73,6 +73,11 @@ func (a *LDAPAuthenticator) validate() error {
 			return errors.New("at least a group prefix is required")
 		}
 	}
+	if len(a.GroupAttributes) == 0 {
+		if a.PrimaryGroupPrefix != "" || a.SecondaryGroupPrefix != "" || a.MembershipGroupPrefix != "" {
+			return errors.New("group attributes not set, group prefixes are ineffective")
+		}
+	}
 	return nil
 }
 
@@ -277,6 +282,11 @@ func (a *LDAPAuthenticator) getUser(userAsJSON []byte, attributes []*ldap.EntryA
 	return json.Marshal(user)
 }
 
+func (a *LDAPAuthenticator) hasGroups() bool {
+	return len(a.GroupAttributes) > 0 &&
+		(a.PrimaryGroupPrefix != "" || a.SecondaryGroupPrefix != "" || a.MembershipGroupPrefix != "")
+}
+
 func (a *LDAPAuthenticator) isUserToUpdate(u *sdk.User, groups []sdk.GroupMapping) bool {
 	if u.ID == 0 {
 		return true
@@ -289,6 +299,9 @@ func (a *LDAPAuthenticator) isUserToUpdate(u *sdk.User, groups []sdk.GroupMappin
 			logger.AppLogger.Debug("web client permissions to update", "user", u.Username, "perm", perm)
 			return true
 		}
+	}
+	if !a.hasGroups() {
+		return false
 	}
 	if len(groups) != len(u.Groups) {
 		logger.AppLogger.Debug("groups to update", "user", u.Username)
