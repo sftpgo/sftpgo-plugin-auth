@@ -238,18 +238,17 @@ func (a *LDAPAuthenticator) getUser(userAsJSON []byte, attributes []*ldap.EntryA
 			if val == "" {
 				continue
 			}
-			val = strings.ToLower(val)
-			if a.PrimaryGroupPrefix != "" && strings.HasPrefix(val, a.PrimaryGroupPrefix) {
+			if a.PrimaryGroupPrefix != "" && strings.HasPrefix(strings.ToLower(val), a.PrimaryGroupPrefix) {
 				groups = append(groups, sdk.GroupMapping{
 					Name: val,
 					Type: sdk.GroupTypePrimary,
 				})
-			} else if a.SecondaryGroupPrefix != "" && strings.HasPrefix(val, a.SecondaryGroupPrefix) {
+			} else if a.SecondaryGroupPrefix != "" && strings.HasPrefix(strings.ToLower(val), a.SecondaryGroupPrefix) {
 				groups = append(groups, sdk.GroupMapping{
 					Name: val,
 					Type: sdk.GroupTypeSecondary,
 				})
-			} else if a.MembershipGroupPrefix != "" && strings.HasPrefix(val, a.MembershipGroupPrefix) {
+			} else if a.MembershipGroupPrefix != "" && strings.HasPrefix(strings.ToLower(val), a.MembershipGroupPrefix) {
 				groups = append(groups, sdk.GroupMapping{
 					Name: val,
 					Type: sdk.GroupTypeMembership,
