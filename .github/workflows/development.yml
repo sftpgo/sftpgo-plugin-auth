@@ -6,7 +6,7 @@ on:
   pull_request:
 
 env:
-  GO_VERSION: '1.20'
+  GO_VERSION: '1.22'
 
 jobs:
   build:
@@ -88,11 +88,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.20'
+          go-version: '1.22'
 
       - name: Run tests
         run: |
-          curl -L https://github.com/glauth/glauth/releases/latest/download/glauth-linux-amd64 --output "test/glauth-linux-amd64"
+          #curl -L https://github.com/glauth/glauth/releases/latest/download/glauth-linux-amd64 --output "test/glauth-linux-amd64"
+          curl -L https://github.com/glauth/glauth/releases/download/v2.3.0/glauth-linux-amd64 --output "test/glauth-linux-amd64"
           cd test && chmod 755 glauth-linux-amd64 && ./glauth-linux-amd64 -c glauth.cfg &
           sleep 5
           go test -v -p 1 -timeout 5m ./... -covermode=atomic
@@ -105,9 +106,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.20'
+          go-version: '1.22'
       - uses: actions/checkout@v4
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v5
         with:
           version: latest
