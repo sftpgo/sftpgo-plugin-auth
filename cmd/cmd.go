@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	version   = "1.0.6"
+	version   = "1.0.7-dev"
 	envPrefix = "SFTPGO_PLUGIN_AUTH_"
 )
 
@@ -50,7 +50,7 @@ func init() {
 }
 
 var (
-	ldapURL                string
+	ldapURL                cli.StringSlice
 	ldapBaseDN             string
 	ldapUsername           string
 	ldapPassword           string
@@ -75,9 +75,9 @@ var (
 				Name:  "serve",
 				Usage: "Launch the SFTPGo plugin, it must be called from an SFTPGo instance",
 				Flags: []cli.Flag{
-					&cli.StringFlag{
+					&cli.StringSliceFlag{
 						Name:        "ldap-url",
-						Usage:       "LDAP url, e.g ldap://192.168.1.5:389 or ldaps://192.168.1.5:636",
+						Usage:       "LDAP url, e.g ldap://192.168.1.5:389 or ldaps://192.168.1.5:636. By specifying multiple URLs you will achieve load balancing and high availability",
 						Destination: &ldapURL,
 						EnvVars:     []string{envPrefix + "LDAP_URL"},
 					},
@@ -173,7 +173,7 @@ var (
 					},
 				},
 				Action: func(ctx *cli.Context) error {
-					a, err := authenticator.NewAuthenticator(ldapURL, ldapBaseDN, ldapUsername, ldapPassword, startTLS,
+					a, err := authenticator.NewAuthenticator(ldapURL.Value(), ldapBaseDN, ldapUsername, ldapPassword, startTLS,
 						skipTLSVerify == 1, usersBaseDir, cacheTime, ldapSearchQuery, ldapGroupAttributes.Value(),
 						caCertificates.Value(), primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
 						requireGroupMembership)
@@ -189,6 +189,7 @@ var (
 						GRPCServer: plugin.DefaultGRPCServer,
 					})
 
+					a.Cleanup()
 					return errors.New("the plugin exited unexpectedly")
 				},
 			},

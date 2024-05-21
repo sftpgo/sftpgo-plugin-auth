@@ -19,9 +19,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
@@ -31,7 +33,7 @@ import (
 )
 
 type LDAPAuthenticator struct {
-	DialURL               string
+	DialURLs              []string
 	BaseDN                string
 	Username              string
 	Password              string
@@ -44,10 +46,21 @@ type LDAPAuthenticator struct {
 	RequireGroups         bool
 	BaseDir               string
 	tlsConfig             *tls.Config
+	monitorTicker         *time.Ticker
+	cleanupDone           chan bool
+	mu                    sync.RWMutex
+	activeURLs            []string
 }
 
 func (a *LDAPAuthenticator) validate() error {
-	if a.DialURL == "" {
+	var urls []string
+	for _, u := range a.DialURLs {
+		if u != "" && !contains(urls, u) {
+			urls = append(urls, u)
+		}
+	}
+	a.DialURLs = urls
+	if len(a.DialURLs) == 0 {
 		return errors.New("ldap: dial URL is required")
 	}
 	if a.BaseDN == "" {
@@ -78,7 +91,94 @@ func (a *LDAPAuthenticator) validate() error {
 			return errors.New("group attributes not set, group prefixes are ineffective")
 		}
 	}
+	a.setActiveDialURLs(a.DialURLs)
 	return nil
+}
+
+func (a *LDAPAuthenticator) setActiveDialURLs(urls []string) {
+	if len(a.DialURLs) == 1 {
+		return
+	}
+	a.startMonitorTicker(2 * time.Minute)
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.activeURLs = nil
+	a.activeURLs = append(a.activeURLs, urls...)
+}
+
+func (a *LDAPAuthenticator) addActiveDialURL(val string) {
+	if len(a.DialURLs) == 1 {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if !contains(a.activeURLs, val) {
+		a.activeURLs = append(a.activeURLs, val)
+		logger.AppLogger.Info("ldap connection restored", "dial URL", val,
+			"number of active dial URLs", len(a.activeURLs))
+	}
+}
+
+func (a *LDAPAuthenticator) removeActiveDialURL(val string, err error) {
+	if len(a.DialURLs) == 1 {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	var urls []string
+	for _, u := range a.activeURLs {
+		if u != val {
+			urls = append(urls, u)
+		}
+	}
+	a.activeURLs = urls
+	logger.AppLogger.Error("ldap connection error", "dial URL", val, "error", err,
+		"number of active dial URLs", len(a.activeURLs))
+}
+
+func (a *LDAPAuthenticator) getDialURLs() []string {
+	if len(a.DialURLs) == 1 {
+		return a.DialURLs
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if len(a.activeURLs) == 0 {
+		logger.AppLogger.Warn("no active dial URL, trying all the defined URLs")
+		return a.DialURLs
+	}
+
+	urls := make([]string, len(a.activeURLs))
+	copy(urls, a.activeURLs)
+
+	rand.Shuffle(len(urls), func(i, j int) {
+		urls[i], urls[j] = urls[j], urls[i]
+	})
+
+	return urls
+}
+
+func (a *LDAPAuthenticator) isDialURLActive(val string) bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return contains(a.activeURLs, val)
+}
+
+func (a *LDAPAuthenticator) monitorDialURLs() {
+	for _, u := range a.DialURLs {
+		if !a.isDialURLActive(u) {
+			conn, err := a.getLDAPConnection(u)
+			if err == nil {
+				conn.Close()
+				a.addActiveDialURL(u)
+			}
+		}
+	}
 }
 
 func (a *LDAPAuthenticator) CheckUserAndPass(username, password, _, _ string, userAsJSON []byte) ([]byte, error) {
@@ -322,12 +422,27 @@ func (a *LDAPAuthenticator) isUserToUpdate(u *sdk.User, groups []sdk.GroupMappin
 	return false
 }
 
-func (a *LDAPAuthenticator) connect() (*ldap.Conn, error) {
+func (a *LDAPAuthenticator) connect() (conn *ldap.Conn, err error) {
+	for _, url := range a.getDialURLs() {
+		conn, err = a.getLDAPConnection(url)
+		if err == nil {
+			a.addActiveDialURL(url)
+		} else {
+			a.removeActiveDialURL(url, err)
+		}
+		if !a.isRetryableError(err) {
+			return
+		}
+	}
+	return
+}
+
+func (a *LDAPAuthenticator) getLDAPConnection(dialURL string) (*ldap.Conn, error) {
 	opts := []ldap.DialOpt{
 		ldap.DialWithDialer(&net.Dialer{Timeout: 15 * time.Second}),
 		ldap.DialWithTLSConfig(a.tlsConfig),
 	}
-	l, err := ldap.DialURL(a.DialURL, opts...)
+	l, err := ldap.DialURL(dialURL, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -338,4 +453,46 @@ func (a *LDAPAuthenticator) connect() (*ldap.Conn, error) {
 		}
 	}
 	return l, err
+}
+
+func (*LDAPAuthenticator) isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var ldapErr *ldap.Error
+	if errors.As(err, &ldapErr) {
+		return ldapErr.ResultCode == ldap.ErrorNetwork
+	}
+	return false
+}
+
+func (a *LDAPAuthenticator) stopMonitorTicker() {
+	if a.monitorTicker != nil {
+		a.monitorTicker.Stop()
+		a.cleanupDone <- true
+		a.monitorTicker = nil
+	}
+}
+
+func (a *LDAPAuthenticator) startMonitorTicker(interval time.Duration) {
+	a.stopMonitorTicker()
+	a.monitorTicker = time.NewTicker(interval)
+	a.cleanupDone = make(chan bool)
+
+	go func() {
+		logger.AppLogger.Info("start monitor task for dial URLs", "dial URLs", len(a.DialURLs))
+		for {
+			select {
+			case <-a.cleanupDone:
+				logger.AppLogger.Info("monitor task for dial URLs ended")
+				return
+			case <-a.monitorTicker.C:
+				a.monitorDialURLs()
+			}
+		}
+	}()
+}
+
+func (a *LDAPAuthenticator) Cleanup() {
+	a.stopMonitorTicker()
 }

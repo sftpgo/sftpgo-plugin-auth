@@ -29,8 +29,6 @@ import (
 )
 
 const (
-	ldapURL               = "ldap://localhost:3893"
-	ldapsURL              = "ldaps://localhost:3894"
 	baseDN                = "dc=glauth,dc=com"
 	username              = "cn=serviceuser,dc=glauth,dc=com"
 	password              = "mysecret"
@@ -70,6 +68,12 @@ ktvsQuhB3uFUterw/2ONsOChx7Ybu36Zk47TKBpktfxDQ578TVoZ7xWSAFqCPHvx
 A5VSwAg7tdBvORfqQjhiJRnhwr50RaNQABTLS0l5Vsn2mitApPs7iKiIts2ieWsU
 EsdgvPZR2e5IkA==
 -----END CERTIFICATE-----`
+)
+
+var (
+	ldapURL          = []string{"ldap://localhost:3893"}
+	ldapsURL         = []string{"ldaps://localhost:3894"}
+	multipleLDAPURLs = []string{"ldap://localhost:3893", "ldap://localhost:3895"}
 )
 
 func TestLDAPAuthenticator(t *testing.T) {
@@ -189,7 +193,7 @@ func TestLDAPS(t *testing.T) {
 }
 
 func TestLDAPConnectionErrors(t *testing.T) {
-	auth, err := NewAuthenticator("ldap://localhost:3892", baseDN, username, password, 0, true, "", 0, searchQuery,
+	auth, err := NewAuthenticator([]string{"ldap://localhost:3892"}, baseDN, username, password, 0, true, "", 0, searchQuery,
 		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix, false)
 	require.NoError(t, err)
 	_, err = auth.CheckUserAndPass(user1, password, "", "", nil)
@@ -213,11 +217,14 @@ func TestStartTLS(t *testing.T) {
 }
 
 func TestValidation(t *testing.T) {
-	_, err := NewAuthenticator("", "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false)
+	_, err := NewAuthenticator(nil, "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "dial URL is required")
+	_, err = NewAuthenticator([]string{"", ""}, "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "dial URL is required")
 	a := LDAPAuthenticator{
-		DialURL: ldapURL,
+		DialURLs: ldapURL,
 	}
 	err = a.validate()
 	require.Error(t, err)
@@ -258,6 +265,13 @@ func TestValidation(t *testing.T) {
 	a.PrimaryGroupPrefix = "sftpgo_primary"
 	err = a.validate()
 	require.NoError(t, err)
+	a.DialURLs = []string{"ldap://1.2.3.4:389", "ldap://1.2.3.4:389", "ldap://1.2.3.5:389"}
+	err = a.validate()
+	require.NoError(t, err)
+	assert.Len(t, a.DialURLs, 2)
+	assert.Contains(t, a.DialURLs, "ldap://1.2.3.4:389")
+	assert.Contains(t, a.DialURLs, "ldap://1.2.3.5:389")
+	a.Cleanup()
 }
 
 func TestUnsupportedAuthMethods(t *testing.T) {
@@ -348,4 +362,43 @@ func TestLoadCACerts(t *testing.T) {
 	require.NotNil(t, auth.tlsConfig.RootCAs)
 	err = os.Remove(caCrtPath)
 	require.NoError(t, err)
+}
+
+func TestLDAPMonitor(t *testing.T) {
+	auth, err := NewAuthenticator(multipleLDAPURLs, baseDN, username, password, 0, false, "", 2, searchQuery,
+		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix, true)
+	require.NoError(t, err)
+	defer auth.Cleanup()
+
+	assert.Len(t, auth.getDialURLs(), 2)
+	auth.removeActiveDialURL(multipleLDAPURLs[0], nil)
+	auth.removeActiveDialURL(multipleLDAPURLs[1], nil)
+
+	auth.startMonitorTicker(100 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return len(auth.getDialURLs()) == 1
+	}, time.Second, 250*time.Millisecond)
+
+	auth.removeActiveDialURL(multipleLDAPURLs[0], nil)
+	auth.removeActiveDialURL(multipleLDAPURLs[1], nil)
+	// no active URL, all defined urls will be returned
+	assert.Len(t, auth.getDialURLs(), 2)
+}
+
+func TestRetryableErrors(t *testing.T) {
+	a := LDAPAuthenticator{}
+	require.False(t, a.isRetryableError(nil))
+
+	err := &ldap.Error{
+		Err:        errNotImplemented,
+		ResultCode: ldap.ErrorNetwork,
+	}
+	require.True(t, a.isRetryableError(err))
+
+	err = &ldap.Error{
+		Err:        errNotImplemented,
+		ResultCode: ldap.ErrorUnexpectedMessage,
+	}
+	require.False(t, a.isRetryableError(err))
+	require.False(t, a.isRetryableError(fs.ErrPermission))
 }

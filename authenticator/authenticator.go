@@ -32,7 +32,7 @@ var (
 		sdk.WebClientPasswordResetDisabled}
 )
 
-func NewAuthenticator(dialURL, baseDN, username, password string, startTLS int, skipTLSVerify bool,
+func NewAuthenticator(dialURLs []string, baseDN, username, password string, startTLS int, skipTLSVerify bool,
 	baseDir string, cacheTime int, searchQuery string, groupAttributes, caCertificates []string,
 	primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix string, requiresGroup bool,
 ) (*LDAPAuthenticator, error) {
@@ -45,7 +45,7 @@ func NewAuthenticator(dialURL, baseDN, username, password string, startTLS int, 
 		InsecureSkipVerify: skipTLSVerify,
 	}
 	auth := &LDAPAuthenticator{
-		DialURL:               dialURL,
+		DialURLs:              dialURLs,
 		BaseDN:                baseDN,
 		Username:              username,
 		Password:              password,
@@ -70,7 +70,7 @@ func NewAuthenticator(dialURL, baseDN, username, password string, startTLS int, 
 		}
 		startCleanupTicker(10 * time.Minute)
 	}
-	logger.AppLogger.Info("authenticator created", "dial URL", auth.DialURL, "base dn", auth.BaseDN,
+	logger.AppLogger.Info("authenticator created", "dial URLs", auth.DialURLs, "base dn", auth.BaseDN,
 		"search query", auth.SearchQuery)
 	return auth, nil
 }

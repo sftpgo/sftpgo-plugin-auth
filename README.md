@@ -17,7 +17,7 @@ USAGE:
    sftpgo-plugin-auth serve [command options] [arguments...]
 
 OPTIONS:
-   --ldap-url value                                                 LDAP url, e.g ldap://192.168.1.5:389 or ldaps://192.168.1.5:636 [$SFTPGO_PLUGIN_AUTH_LDAP_URL]
+   --ldap-url value [ --ldap-url value ]                            LDAP url, e.g ldap://192.168.1.5:389 or ldaps://192.168.1.5:636. By specifying multiple URLs you will achieve load balancing and high availability [$SFTPGO_PLUGIN_AUTH_LDAP_URL]
    --ldap-base-dn value                                             The base DN defines the address of the root object in the LDAP directory, e.g dc=mylab,dc=local [$SFTPGO_PLUGIN_AUTH_LDAP_BASE_DN]
    --ldap-bind-dn value                                             The bind DN used to log in at the LDAP server in order to perform searches, e.g cn=Administrator,cn=users,dc=mylab,dc=local. This should be a read-oly user [$SFTPGO_PLUGIN_AUTH_LDAP_USERNAME, $SFTPGO_PLUGIN_AUTH_LDAP_BIND_DN]
    --ldap-password value                                            The password for the defined ldap-bind-dn. If empty an anonymous bind will be attempted [$SFTPGO_PLUGIN_AUTH_LDAP_PASSWORD]
