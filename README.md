@@ -27,6 +27,7 @@ OPTIONS:
    --secondary-group-prefix value                                   Prefix for LDAP groups to map to secondary groups of SFTPGo users [$SFTPGO_PLUGIN_AUTH_SECONDARY_GROUP_PREFIX]
    --membership-group-prefix value                                  Prefix for LDAP groups to map to membership groups of SFTPGo users [$SFTPGO_PLUGIN_AUTH_MEMBERSHIP_GROUP_PREFIX]
    --require-groups                                                 Require authenticated users to be members of at least one SFTPGo group (default: false) [$SFTPGO_PLUGIN_AUTH_REQUIRE_GROUPS]
+   --user-requirements value                                        Requirements for SFTPGo users. 1 means users must be already defined in SFTPGo (default: 0) [$SFTPGO_PLUGIN_AUTH_USER_REQUIREMENTS]
    --starttls value                                                 STARTTLS is the preferred method of encrypting an LDAP connection. Use it instead of using the ldaps:// URL schema (default: 0) [$SFTPGO_PLUGIN_AUTH_STARTTLS]
    --users-base-dir value                                           Users default base directory. Leave empty if already set in SFTPGo. If set it must be an absolute path [$SFTPGO_PLUGIN_AUTH_USERS_BASE_DIR]
    --cache-time value                                               Defines the cache time, in seconds, for authenticated users. 0 means no cache (default: 0) [$SFTPGO_PLUGIN_AUTH_CACHE_TIME]

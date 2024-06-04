@@ -79,7 +79,8 @@ var (
 func TestLDAPAuthenticator(t *testing.T) {
 	baseDir := filepath.Clean(os.TempDir())
 	auth, err := NewAuthenticator(ldapURL, baseDN, username, password, 0, false, baseDir, 2, searchQuery,
-		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix, true)
+		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
+		true, 0)
 	require.NoError(t, err)
 	require.Nil(t, auth.tlsConfig.RootCAs)
 	defer func() {
@@ -91,6 +92,12 @@ func TestLDAPAuthenticator(t *testing.T) {
 	e, ok := err.(*ldap.Error)
 	require.True(t, ok)
 	require.Equal(t, uint16(49), e.ResultCode)
+	auth.SFTPGoUserRequirements = 1
+	_, err = auth.CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LDAP users not defined in SFTPGo are not allowed")
+
+	auth.SFTPGoUserRequirements = 0
 	userJSON, err := auth.CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
 	require.NoError(t, err)
 	var user sdk.User
@@ -158,7 +165,8 @@ func TestLDAPAuthenticator(t *testing.T) {
 
 func TestPreserveUserChanges(t *testing.T) {
 	auth, err := NewAuthenticator(ldapURL, baseDN, username, password, 0, false, "", 0, searchQuery,
-		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix, false)
+		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
+		false, 0)
 	require.NoError(t, err)
 	userJSON, err := auth.CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
 	require.NoError(t, err)
@@ -184,7 +192,8 @@ func TestPreserveUserChanges(t *testing.T) {
 
 func TestLDAPS(t *testing.T) {
 	auth, err := NewAuthenticator(ldapsURL, baseDN, username, password, 0, true, "", 0, searchQuery,
-		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix, false)
+		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
+		false, 0)
 	require.NoError(t, err)
 	l, err := auth.connect()
 	require.NoError(t, err)
@@ -194,7 +203,8 @@ func TestLDAPS(t *testing.T) {
 
 func TestLDAPConnectionErrors(t *testing.T) {
 	auth, err := NewAuthenticator([]string{"ldap://localhost:3892"}, baseDN, username, password, 0, true, "", 0, searchQuery,
-		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix, false)
+		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
+		false, 0)
 	require.NoError(t, err)
 	_, err = auth.CheckUserAndPass(user1, password, "", "", nil)
 	require.Error(t, err)
@@ -207,7 +217,8 @@ func TestLDAPConnectionErrors(t *testing.T) {
 func TestStartTLS(t *testing.T) {
 	// glauth does not support STARTTLS
 	auth, err := NewAuthenticator(ldapURL, baseDN, username, password, 1, true, "", 0, searchQuery,
-		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix, false)
+		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
+		false, 0)
 	require.NoError(t, err)
 	_, err = auth.connect()
 	require.Error(t, err)
@@ -217,10 +228,10 @@ func TestStartTLS(t *testing.T) {
 }
 
 func TestValidation(t *testing.T) {
-	_, err := NewAuthenticator(nil, "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false)
+	_, err := NewAuthenticator(nil, "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false, 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "dial URL is required")
-	_, err = NewAuthenticator([]string{"", ""}, "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false)
+	_, err = NewAuthenticator([]string{"", ""}, "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false, 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "dial URL is required")
 	a := LDAPAuthenticator{
@@ -291,10 +302,14 @@ func TestUserToUpdate(t *testing.T) {
 		},
 	}
 	a := LDAPAuthenticator{
-		GroupAttributes:    []string{"memberOf"},
-		PrimaryGroupPrefix: "sftpgo_primary",
+		GroupAttributes:        []string{"memberOf"},
+		PrimaryGroupPrefix:     "sftpgo_primary",
+		SFTPGoUserRequirements: 1,
 	}
 	res := a.isUserToUpdate(u, nil)
+	require.False(t, res)
+	a.SFTPGoUserRequirements = 0
+	res = a.isUserToUpdate(u, nil)
 	require.True(t, res)
 	u.Password = password
 	res = a.isUserToUpdate(u, nil)
@@ -347,17 +362,17 @@ func TestGetCNFromDN(t *testing.T) {
 func TestLoadCACerts(t *testing.T) {
 	caCrtPath := "testcacrt"
 	_, err := NewAuthenticator(ldapURL, baseDN, username, password, 0, true, "", 0,
-		searchQuery, nil, []string{caCrtPath}, "", "", "", false)
+		searchQuery, nil, []string{caCrtPath}, "", "", "", false, 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is not an absolute path")
 	caCrtPath = filepath.Join(os.TempDir(), caCrtPath)
 	_, err = NewAuthenticator(ldapURL, baseDN, username, password, 0, true, "", 0,
-		searchQuery, nil, []string{caCrtPath}, "", "", "", false)
+		searchQuery, nil, []string{caCrtPath}, "", "", "", false, 0)
 	require.ErrorIs(t, err, fs.ErrNotExist)
 	err = os.WriteFile(caCrtPath, []byte(caCRT), 0600)
 	require.NoError(t, err)
 	auth, err := NewAuthenticator(ldapURL, baseDN, username, password, 0, true, "", 0,
-		searchQuery, nil, []string{caCrtPath}, "", "", "", false)
+		searchQuery, nil, []string{caCrtPath}, "", "", "", false, 0)
 	require.NoError(t, err)
 	require.NotNil(t, auth.tlsConfig.RootCAs)
 	err = os.Remove(caCrtPath)
@@ -366,7 +381,8 @@ func TestLoadCACerts(t *testing.T) {
 
 func TestLDAPMonitor(t *testing.T) {
 	auth, err := NewAuthenticator(multipleLDAPURLs, baseDN, username, password, 0, false, "", 2, searchQuery,
-		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix, true)
+		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
+		true, 0)
 	require.NoError(t, err)
 	defer auth.Cleanup()
 

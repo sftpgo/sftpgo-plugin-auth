@@ -35,6 +35,7 @@ var (
 func NewAuthenticator(dialURLs []string, baseDN, username, password string, startTLS int, skipTLSVerify bool,
 	baseDir string, cacheTime int, searchQuery string, groupAttributes, caCertificates []string,
 	primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix string, requiresGroup bool,
+	sftpgoUserRequirements int,
 ) (*LDAPAuthenticator, error) {
 	rootCAs, err := loadCACerts(caCertificates)
 	if err != nil {
@@ -45,19 +46,20 @@ func NewAuthenticator(dialURLs []string, baseDN, username, password string, star
 		InsecureSkipVerify: skipTLSVerify,
 	}
 	auth := &LDAPAuthenticator{
-		DialURLs:              dialURLs,
-		BaseDN:                baseDN,
-		Username:              username,
-		Password:              password,
-		StartTLS:              startTLS,
-		SearchQuery:           searchQuery,
-		GroupAttributes:       groupAttributes,
-		BaseDir:               baseDir,
-		PrimaryGroupPrefix:    strings.ToLower(primaryGroupPrefix),
-		SecondaryGroupPrefix:  strings.ToLower(secondaryGroupPrefix),
-		MembershipGroupPrefix: strings.ToLower(membershipGroupPrefix),
-		RequireGroups:         requiresGroup,
-		tlsConfig:             tlsConfig,
+		DialURLs:               dialURLs,
+		BaseDN:                 baseDN,
+		Username:               username,
+		Password:               password,
+		StartTLS:               startTLS,
+		SearchQuery:            searchQuery,
+		GroupAttributes:        groupAttributes,
+		BaseDir:                baseDir,
+		PrimaryGroupPrefix:     strings.ToLower(primaryGroupPrefix),
+		SecondaryGroupPrefix:   strings.ToLower(secondaryGroupPrefix),
+		MembershipGroupPrefix:  strings.ToLower(membershipGroupPrefix),
+		RequireGroups:          requiresGroup,
+		SFTPGoUserRequirements: sftpgoUserRequirements,
+		tlsConfig:              tlsConfig,
 	}
 	if err := auth.validate(); err != nil {
 		return nil, err

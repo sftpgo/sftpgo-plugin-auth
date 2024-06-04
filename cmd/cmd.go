@@ -65,6 +65,7 @@ var (
 	secondaryGroupPrefix   string
 	membershipGroupPrefix  string
 	requireGroupMembership bool
+	sftpgoUserRequirements int
 
 	rootCmd = &cli.App{
 		Name:    "sftpgo-plugin-auth",
@@ -140,6 +141,12 @@ var (
 						EnvVars:     []string{envPrefix + "REQUIRE_GROUPS"},
 					},
 					&cli.IntFlag{
+						Name:        "user-requirements",
+						Usage:       "Requirements for SFTPGo users. 1 means users must be already defined in SFTPGo",
+						Destination: &sftpgoUserRequirements,
+						EnvVars:     []string{envPrefix + "USER_REQUIREMENTS"},
+					},
+					&cli.IntFlag{
 						Name:        "starttls",
 						Usage:       "STARTTLS is the preferred method of encrypting an LDAP connection. Use it instead of using the ldaps:// URL schema",
 						Destination: &startTLS,
@@ -176,7 +183,7 @@ var (
 					a, err := authenticator.NewAuthenticator(ldapURL.Value(), ldapBaseDN, ldapUsername, ldapPassword, startTLS,
 						skipTLSVerify == 1, usersBaseDir, cacheTime, ldapSearchQuery, ldapGroupAttributes.Value(),
 						caCertificates.Value(), primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
-						requireGroupMembership)
+						requireGroupMembership, sftpgoUserRequirements)
 					if err != nil {
 						logger.AppLogger.Error("unable to create the authenticator", "err", err)
 						return err

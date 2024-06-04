@@ -33,23 +33,24 @@ import (
 )
 
 type LDAPAuthenticator struct {
-	DialURLs              []string
-	BaseDN                string
-	Username              string
-	Password              string
-	StartTLS              int
-	SearchQuery           string
-	GroupAttributes       []string
-	PrimaryGroupPrefix    string
-	SecondaryGroupPrefix  string
-	MembershipGroupPrefix string
-	RequireGroups         bool
-	BaseDir               string
-	tlsConfig             *tls.Config
-	monitorTicker         *time.Ticker
-	cleanupDone           chan bool
-	mu                    sync.RWMutex
-	activeURLs            []string
+	DialURLs               []string
+	BaseDN                 string
+	Username               string
+	Password               string
+	StartTLS               int
+	SearchQuery            string
+	GroupAttributes        []string
+	PrimaryGroupPrefix     string
+	SecondaryGroupPrefix   string
+	MembershipGroupPrefix  string
+	RequireGroups          bool
+	SFTPGoUserRequirements int
+	BaseDir                string
+	tlsConfig              *tls.Config
+	monitorTicker          *time.Ticker
+	cleanupDone            chan bool
+	mu                     sync.RWMutex
+	activeURLs             []string
 }
 
 func (a *LDAPAuthenticator) validate() error {
@@ -208,10 +209,14 @@ func (a *LDAPAuthenticator) CheckUserAndPass(username, password, _, _ string, us
 	if err := l.Bind(entry.DN, password); err != nil {
 		return nil, err
 	}
+	result, err := a.getUser(userAsJSON, entry.Attributes)
+	if err != nil {
+		return nil, err
+	}
 	if cache != nil {
 		cache.Add(username, password)
 	}
-	return a.getUser(userAsJSON, entry.Attributes)
+	return result, nil
 }
 
 func (a *LDAPAuthenticator) CheckUserAndTLSCert(_, _, _, _ string, _ []byte) ([]byte, error) {
@@ -327,6 +332,11 @@ func (a *LDAPAuthenticator) getUser(userAsJSON []byte, attributes []*ldap.EntryA
 	if err := json.Unmarshal(userAsJSON, &user); err != nil {
 		return nil, err
 	}
+	if user.ID == 0 && a.isSFTPGoUserRequired() {
+		err := errors.New("LDAP users not defined in SFTPGo are not allowed")
+		logger.AppLogger.Debug("no SFTPGo user defined", "username", user.Username, "err", err)
+		return nil, err
+	}
 	var groups []sdk.GroupMapping
 
 	for _, attr := range attributes {
@@ -358,7 +368,7 @@ func (a *LDAPAuthenticator) getUser(userAsJSON []byte, attributes []*ldap.EntryA
 	}
 	if a.RequireGroups && len(groups) == 0 {
 		err := errors.New("users without group membership are not allowed")
-		logger.AppLogger.Debug("no group for found", "user", user.Username, "err", err)
+		logger.AppLogger.Debug("no group found", "username", user.Username, "err", err)
 		return nil, err
 	}
 
@@ -386,7 +396,14 @@ func (a *LDAPAuthenticator) hasGroups() bool {
 		(a.PrimaryGroupPrefix != "" || a.SecondaryGroupPrefix != "" || a.MembershipGroupPrefix != "")
 }
 
+func (a *LDAPAuthenticator) isSFTPGoUserRequired() bool {
+	return a.SFTPGoUserRequirements == 1
+}
+
 func (a *LDAPAuthenticator) isUserToUpdate(u *sdk.User, groups []sdk.GroupMapping) bool {
+	if a.isSFTPGoUserRequired() {
+		return false
+	}
 	if u.ID == 0 {
 		return true
 	}
