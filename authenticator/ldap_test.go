@@ -352,6 +352,8 @@ func TestGetCNFromDN(t *testing.T) {
 	res = getCNFromDN("cn=test")
 	assert.Equal(t, "test", res)
 	res = getCNFromDN("test")
+	assert.Equal(t, "test", res)
+	res = getCNFromDN("")
 	assert.Empty(t, res)
 	res = getCNFromDN("cn=admin ,ou=users,dc=mylab,dc=local")
 	assert.Equal(t, "admin", res)
