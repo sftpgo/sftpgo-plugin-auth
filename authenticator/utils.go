@@ -82,9 +82,11 @@ func getCNFromDN(dn string) string {
 	parts := strings.Split(dn, ",")
 	if len(parts) > 0 {
 		cn := strings.ToLower(parts[0])
-		if strings.HasPrefix(cn, "cn=") || strings.HasPrefix(cn, "ou=") {
-			return strings.TrimSpace(cn[3:])
+		subParts := strings.Split(cn, "=")
+		if len(subParts) == 2 {
+			return strings.TrimSpace(subParts[1])
 		}
+		// See #13.
 		return cn
 	}
 	return ""
