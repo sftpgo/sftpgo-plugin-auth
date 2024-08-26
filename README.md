@@ -52,7 +52,6 @@ SFTPGO_PLUGIN_AUTH_LDAP_BASE_DN="dc=mylab,dc=local"
 SFTPGO_PLUGIN_AUTH_LDAP_BIND_DN="cn=Administrator,cn=users,dc=mylab,dc=local"
 SFTPGO_PLUGIN_AUTH_LDAP_PASSWORD="Password.123456"
 SFTPGO_PLUGIN_AUTH_LDAP_SEARCH_QUERY="(&(objectClass=user)(sAMAccountType=805306368)(sAMAccountName=%username%))"
-SFTPGO_PLUGIN_AUTH_CACHE_TIME=60
 SFTPGO_PLUGINS__0__TYPE=auth
 SFTPGO_PLUGINS__0__AUTH_OPTIONS__SCOPE=5
 SFTPGO_PLUGINS__0__CMD="/usr/local/bin/sftpgo-plugin-auth"

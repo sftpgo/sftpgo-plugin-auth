@@ -65,12 +65,16 @@ func NewAuthenticator(dialURLs []string, baseDN, username, password string, star
 		return nil, err
 	}
 	if cacheTime > 0 {
-		logger.AppLogger.Info("enable user caching", "cache time (sec)", cacheTime)
-		cache = &authCache{
-			cacheTime: cacheTime,
-			cache:     make(map[string]cachedUser),
+		if auth.hasGroups() {
+			logger.AppLogger.Warn("user caching cannot be enabled when groups are defined, continuing without caching")
+		} else {
+			logger.AppLogger.Info("enable users caching", "cache time (sec)", cacheTime)
+			cache = &authCache{
+				cacheTime: cacheTime,
+				cache:     make(map[string]cachedUser),
+			}
+			startCleanupTicker(10 * time.Minute)
 		}
-		startCleanupTicker(10 * time.Minute)
 	}
 	logger.AppLogger.Info("authenticator created", "dial URLs", auth.DialURLs, "base dn", auth.BaseDN,
 		"search query", auth.SearchQuery)

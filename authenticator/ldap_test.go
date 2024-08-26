@@ -83,9 +83,6 @@ func TestLDAPAuthenticator(t *testing.T) {
 		true, 0)
 	require.NoError(t, err)
 	require.Nil(t, auth.tlsConfig.RootCAs)
-	defer func() {
-		cache = nil
-	}()
 
 	_, err = auth.CheckUserAndPass(user1, "wrong", "", "", nil)
 	require.Error(t, err)
@@ -109,13 +106,20 @@ func TestLDAPAuthenticator(t *testing.T) {
 	// empty password
 	_, err = auth.CheckUserAndPass(user1, "", "", "", nil)
 	require.ErrorIs(t, err, errInvalidCredentials)
-	// error from cache
+	// wrong password
 	_, err = auth.CheckUserAndPass(user1, "wrong", "", "", nil)
-	require.ErrorIs(t, err, errInvalidCredentials)
-	// auth ok from cache
+	require.Error(t, err)
+	e, ok = err.(*ldap.Error)
+	require.True(t, ok)
+	require.Equal(t, uint16(49), e.ResultCode)
+	// auth ok
 	userJSON, err = auth.CheckUserAndPass(user1, password, "", "", userJSON)
 	require.NoError(t, err)
-	require.Nil(t, userJSON)
+	err = json.Unmarshal(userJSON, &user)
+	require.NoError(t, err)
+	require.Equal(t, 1, user.Status)
+	require.Equal(t, filepath.Join(baseDir, user1), user.HomeDir)
+	require.Len(t, user.Groups, 2)
 	// auth with a different user
 	userJSON, err = auth.CheckUserAndPass(user2, password, "", "", []byte(`{"username":"user2"}`))
 	require.NoError(t, err)
@@ -125,6 +129,73 @@ func TestLDAPAuthenticator(t *testing.T) {
 	require.Equal(t, 1, user.Status)
 	require.Equal(t, filepath.Join(baseDir, user2), user.HomeDir)
 	require.Len(t, user.Groups, 1)
+	// test keyboard interactive authentication
+	_, err = auth.CheckUserAndKeyboardInteractive("missing user", "", "", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not exist")
+	userJSON, err = auth.CheckUserAndKeyboardInteractive(user1, "", "", userJSON)
+	require.NoError(t, err)
+	err = json.Unmarshal(userJSON, &user)
+	require.NoError(t, err)
+	require.Equal(t, 1, user.Status)
+	require.Len(t, user.Groups, 2)
+	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", nil, nil, 1)
+	require.NoError(t, err)
+	_, _, _, res, _, err := auth.SendKeyboardAuthRequest("", user1, "", "", []string{password}, nil, 2)
+	require.NoError(t, err)
+	require.Equal(t, 1, res)
+	// wrong password
+	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{"wrong"}, nil, 2)
+	require.Error(t, err)
+	e, ok = err.(*ldap.Error)
+	require.True(t, ok)
+	require.Equal(t, uint16(49), e.ResultCode)
+	// empty password
+	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{""}, nil, 2)
+	require.ErrorIs(t, err, errInvalidCredentials)
+	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{"wrong"}, nil, 2)
+	require.Error(t, err)
+	e, ok = err.(*ldap.Error)
+	require.True(t, ok)
+	require.Equal(t, uint16(49), e.ResultCode)
+	_, _, _, res, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{password}, nil, 2)
+	require.NoError(t, err)
+	require.Equal(t, 1, res)
+	// no group
+	_, err = auth.CheckUserAndPass("serviceuser", password, "", "", []byte(`{"username":"serviceuser"}`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "users without group membership are not allowed")
+}
+
+func TestAuthFromCache(t *testing.T) {
+	baseDir := filepath.Clean(os.TempDir())
+	auth, err := NewAuthenticator(ldapURL, baseDN, username, password, 0, false, baseDir, 2, searchQuery,
+		nil, nil, "", "", "", false, 0)
+	require.NoError(t, err)
+	require.Nil(t, auth.tlsConfig.RootCAs)
+
+	defer func() {
+		cache = nil
+	}()
+
+	userJSON, err := auth.CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
+	require.NoError(t, err)
+	var user sdk.User
+	err = json.Unmarshal(userJSON, &user)
+	require.NoError(t, err)
+	require.Equal(t, 1, user.Status)
+	require.Equal(t, filepath.Join(baseDir, user1), user.HomeDir)
+	require.Len(t, user.Groups, 0)
+	// empty password
+	_, err = auth.CheckUserAndPass(user1, "", "", "", nil)
+	require.ErrorIs(t, err, errInvalidCredentials)
+	// error from cache
+	_, err = auth.CheckUserAndPass(user1, "wrong", "", "", nil)
+	require.ErrorIs(t, err, errInvalidCredentials)
+	// auth ok from cache
+	userJSON, err = auth.CheckUserAndPass(user1, password, "", "", userJSON)
+	require.NoError(t, err)
+	require.Nil(t, userJSON)
 	// test keyboard interactive authentication
 	_, err = auth.CheckUserAndKeyboardInteractive("missing user", "", "", nil)
 	require.Error(t, err)
@@ -149,18 +220,16 @@ func TestLDAPAuthenticator(t *testing.T) {
 	time.Sleep(2100 * time.Millisecond)
 	found = cache.Has(user1)
 	require.False(t, found)
-	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{"wrong"}, nil, 2)
-	require.Error(t, err)
-	e, ok = err.(*ldap.Error)
-	require.True(t, ok)
-	require.Equal(t, uint16(49), e.ResultCode)
+	// keyboard interactive auth with no cache
 	_, _, _, res, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{password}, nil, 2)
 	require.NoError(t, err)
 	require.Equal(t, 1, res)
-	// no group
-	_, err = auth.CheckUserAndPass("serviceuser", password, "", "", []byte(`{"username":"serviceuser"}`))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "users without group membership are not allowed")
+	found = cache.Has(user1)
+	require.True(t, found)
+	// keyboard interactive auth from cache
+	_, _, _, res, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{password}, nil, 2)
+	require.NoError(t, err)
+	require.Equal(t, 1, res)
 }
 
 func TestPreserveUserChanges(t *testing.T) {
