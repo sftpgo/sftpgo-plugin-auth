@@ -32,45 +32,60 @@ var (
 		sdk.WebClientPasswordResetDisabled}
 )
 
-func NewAuthenticator(dialURLs []string, baseDN, username, password string, startTLS int, skipTLSVerify bool,
-	baseDir string, cacheTime int, searchQuery string, groupAttributes, caCertificates []string,
-	primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix string, requiresGroup bool,
-	sftpgoUserRequirements int,
-) (*LDAPAuthenticator, error) {
-	rootCAs, err := loadCACerts(caCertificates)
+type Config struct {
+	DialURLs               []string `json:"dial_urls"`
+	BaseDN                 string   `json:"base_dn"`
+	Username               string   `json:"username"`
+	Password               string   `json:"password"`
+	StartTLS               int      `json:"start_tls"`
+	SkipTLSVerify          bool     `json:"skip_tls_verify"`
+	CACertificates         []string `json:"ca_certificates"`
+	SearchQuery            string   `json:"search_query"`
+	GroupAttributes        []string `json:"group_attributes"`
+	PrimaryGroupPrefix     string   `json:"primary_group_prefix"`
+	SecondaryGroupPrefix   string   `json:"secondary_group_prefix"`
+	MembershipGroupPrefix  string   `json:"membership_group_prefix"`
+	RequireGroups          bool     `json:"require_groups"`
+	SFTPGoUserRequirements int      `json:"sftpgo_user_requirements"`
+	BaseDir                string   `json:"base_dir"`
+	CacheTime              int      `json:"cache_time"`
+}
+
+func NewAuthenticator(config *Config) (*LDAPAuthenticator, error) {
+	rootCAs, err := loadCACerts(config.CACertificates)
 	if err != nil {
 		return nil, err
 	}
 	tlsConfig := &tls.Config{
 		RootCAs:            rootCAs,
-		InsecureSkipVerify: skipTLSVerify,
+		InsecureSkipVerify: config.SkipTLSVerify,
 	}
 	auth := &LDAPAuthenticator{
-		DialURLs:               dialURLs,
-		BaseDN:                 baseDN,
-		Username:               username,
-		Password:               password,
-		StartTLS:               startTLS,
-		SearchQuery:            searchQuery,
-		GroupAttributes:        groupAttributes,
-		BaseDir:                baseDir,
-		PrimaryGroupPrefix:     strings.ToLower(primaryGroupPrefix),
-		SecondaryGroupPrefix:   strings.ToLower(secondaryGroupPrefix),
-		MembershipGroupPrefix:  strings.ToLower(membershipGroupPrefix),
-		RequireGroups:          requiresGroup,
-		SFTPGoUserRequirements: sftpgoUserRequirements,
+		DialURLs:               config.DialURLs,
+		BaseDN:                 config.BaseDN,
+		Username:               config.Username,
+		Password:               config.Password,
+		StartTLS:               config.StartTLS,
+		SearchQuery:            config.SearchQuery,
+		GroupAttributes:        config.GroupAttributes,
+		BaseDir:                config.BaseDir,
+		PrimaryGroupPrefix:     strings.ToLower(config.PrimaryGroupPrefix),
+		SecondaryGroupPrefix:   strings.ToLower(config.SecondaryGroupPrefix),
+		MembershipGroupPrefix:  strings.ToLower(config.MembershipGroupPrefix),
+		RequireGroups:          config.RequireGroups,
+		SFTPGoUserRequirements: config.SFTPGoUserRequirements,
 		tlsConfig:              tlsConfig,
 	}
 	if err := auth.validate(); err != nil {
 		return nil, err
 	}
-	if cacheTime > 0 {
+	if config.CacheTime > 0 {
 		if auth.hasGroups() {
 			logger.AppLogger.Warn("user caching cannot be enabled when groups are defined, continuing without caching")
 		} else {
-			logger.AppLogger.Info("enable users caching", "cache time (sec)", cacheTime)
+			logger.AppLogger.Info("enable users caching", "cache time (sec)", config.CacheTime)
 			cache = &authCache{
-				cacheTime: cacheTime,
+				cacheTime: config.CacheTime,
 				cache:     make(map[string]cachedUser),
 			}
 			startCleanupTicker(10 * time.Minute)

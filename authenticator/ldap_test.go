@@ -78,9 +78,9 @@ var (
 
 func TestLDAPAuthenticator(t *testing.T) {
 	baseDir := filepath.Clean(os.TempDir())
-	auth, err := NewAuthenticator(ldapURL, baseDN, username, password, 0, false, baseDir, 2, searchQuery,
+	auth, err := NewAuthenticator(getConfig(ldapURL, baseDN, username, password, 0, false, baseDir, 2, searchQuery,
 		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
-		true, 0)
+		true, 0))
 	require.NoError(t, err)
 	require.Nil(t, auth.tlsConfig.RootCAs)
 
@@ -169,8 +169,8 @@ func TestLDAPAuthenticator(t *testing.T) {
 
 func TestAuthFromCache(t *testing.T) {
 	baseDir := filepath.Clean(os.TempDir())
-	auth, err := NewAuthenticator(ldapURL, baseDN, username, password, 0, false, baseDir, 2, searchQuery,
-		nil, nil, "", "", "", false, 0)
+	auth, err := NewAuthenticator(getConfig(ldapURL, baseDN, username, password, 0, false, baseDir, 2, searchQuery,
+		nil, nil, "", "", "", false, 0))
 	require.NoError(t, err)
 	require.Nil(t, auth.tlsConfig.RootCAs)
 
@@ -233,9 +233,9 @@ func TestAuthFromCache(t *testing.T) {
 }
 
 func TestPreserveUserChanges(t *testing.T) {
-	auth, err := NewAuthenticator(ldapURL, baseDN, username, password, 0, false, "", 0, searchQuery,
+	auth, err := NewAuthenticator(getConfig(ldapURL, baseDN, username, password, 0, false, "", 0, searchQuery,
 		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
-		false, 0)
+		false, 0))
 	require.NoError(t, err)
 	userJSON, err := auth.CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
 	require.NoError(t, err)
@@ -260,9 +260,9 @@ func TestPreserveUserChanges(t *testing.T) {
 }
 
 func TestLDAPS(t *testing.T) {
-	auth, err := NewAuthenticator(ldapsURL, baseDN, username, password, 0, true, "", 0, searchQuery,
+	auth, err := NewAuthenticator(getConfig(ldapsURL, baseDN, username, password, 0, true, "", 0, searchQuery,
 		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
-		false, 0)
+		false, 0))
 	require.NoError(t, err)
 	l, err := auth.connect()
 	require.NoError(t, err)
@@ -271,9 +271,9 @@ func TestLDAPS(t *testing.T) {
 }
 
 func TestLDAPConnectionErrors(t *testing.T) {
-	auth, err := NewAuthenticator([]string{"ldap://localhost:3892"}, baseDN, username, password, 0, true, "", 0, searchQuery,
+	auth, err := NewAuthenticator(getConfig([]string{"ldap://localhost:3892"}, baseDN, username, password, 0, true, "", 0, searchQuery,
 		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
-		false, 0)
+		false, 0))
 	require.NoError(t, err)
 	_, err = auth.CheckUserAndPass(user1, password, "", "", nil)
 	require.Error(t, err)
@@ -285,9 +285,9 @@ func TestLDAPConnectionErrors(t *testing.T) {
 
 func TestStartTLS(t *testing.T) {
 	// glauth does not support STARTTLS
-	auth, err := NewAuthenticator(ldapURL, baseDN, username, password, 1, true, "", 0, searchQuery,
+	auth, err := NewAuthenticator(getConfig(ldapURL, baseDN, username, password, 1, true, "", 0, searchQuery,
 		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
-		false, 0)
+		false, 0))
 	require.NoError(t, err)
 	_, err = auth.connect()
 	require.Error(t, err)
@@ -297,10 +297,10 @@ func TestStartTLS(t *testing.T) {
 }
 
 func TestValidation(t *testing.T) {
-	_, err := NewAuthenticator(nil, "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false, 0)
+	_, err := NewAuthenticator(getConfig(nil, "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false, 0))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "dial URL is required")
-	_, err = NewAuthenticator([]string{"", ""}, "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false, 0)
+	_, err = NewAuthenticator(getConfig([]string{"", ""}, "", "", "", 0, false, "", 0, "", nil, nil, "", "", "", false, 0))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "dial URL is required")
 	a := LDAPAuthenticator{
@@ -432,18 +432,18 @@ func TestGetCNFromDN(t *testing.T) {
 
 func TestLoadCACerts(t *testing.T) {
 	caCrtPath := "testcacrt"
-	_, err := NewAuthenticator(ldapURL, baseDN, username, password, 0, true, "", 0,
-		searchQuery, nil, []string{caCrtPath}, "", "", "", false, 0)
+	_, err := NewAuthenticator(getConfig(ldapURL, baseDN, username, password, 0, true, "", 0,
+		searchQuery, nil, []string{caCrtPath}, "", "", "", false, 0))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is not an absolute path")
 	caCrtPath = filepath.Join(os.TempDir(), caCrtPath)
-	_, err = NewAuthenticator(ldapURL, baseDN, username, password, 0, true, "", 0,
-		searchQuery, nil, []string{caCrtPath}, "", "", "", false, 0)
+	_, err = NewAuthenticator(getConfig(ldapURL, baseDN, username, password, 0, true, "", 0,
+		searchQuery, nil, []string{caCrtPath}, "", "", "", false, 0))
 	require.ErrorIs(t, err, fs.ErrNotExist)
 	err = os.WriteFile(caCrtPath, []byte(caCRT), 0600)
 	require.NoError(t, err)
-	auth, err := NewAuthenticator(ldapURL, baseDN, username, password, 0, true, "", 0,
-		searchQuery, nil, []string{caCrtPath}, "", "", "", false, 0)
+	auth, err := NewAuthenticator(getConfig(ldapURL, baseDN, username, password, 0, true, "", 0,
+		searchQuery, nil, []string{caCrtPath}, "", "", "", false, 0))
 	require.NoError(t, err)
 	require.NotNil(t, auth.tlsConfig.RootCAs)
 	err = os.Remove(caCrtPath)
@@ -451,9 +451,9 @@ func TestLoadCACerts(t *testing.T) {
 }
 
 func TestLDAPMonitor(t *testing.T) {
-	auth, err := NewAuthenticator(multipleLDAPURLs, baseDN, username, password, 0, false, "", 2, searchQuery,
+	auth, err := NewAuthenticator(getConfig(multipleLDAPURLs, baseDN, username, password, 0, false, "", 2, searchQuery,
 		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
-		true, 0)
+		true, 0))
 	require.NoError(t, err)
 	defer auth.Cleanup()
 
@@ -488,4 +488,29 @@ func TestRetryableErrors(t *testing.T) {
 	}
 	require.False(t, a.isRetryableError(err))
 	require.False(t, a.isRetryableError(fs.ErrPermission))
+}
+
+func getConfig(dialURLs []string, baseDN, username, password string, startTLS int, skipTLSVerify bool,
+	baseDir string, cacheTime int, searchQuery string, groupAttributes, caCertificates []string,
+	primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix string, requiresGroup bool,
+	sftpgoUserRequirements int,
+) *Config {
+	return &Config{
+		DialURLs:               dialURLs,
+		BaseDN:                 baseDN,
+		Username:               username,
+		Password:               password,
+		StartTLS:               startTLS,
+		SkipTLSVerify:          skipTLSVerify,
+		BaseDir:                baseDir,
+		CacheTime:              cacheTime,
+		SearchQuery:            searchQuery,
+		GroupAttributes:        groupAttributes,
+		CACertificates:         caCertificates,
+		PrimaryGroupPrefix:     primaryGroupPrefix,
+		SecondaryGroupPrefix:   secondaryGroupPrefix,
+		MembershipGroupPrefix:  membershipGroupPrefix,
+		RequireGroups:          requiresGroup,
+		SFTPGoUserRequirements: sftpgoUserRequirements,
+	}
 }

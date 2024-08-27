@@ -180,10 +180,25 @@ var (
 					},
 				},
 				Action: func(ctx *cli.Context) error {
-					a, err := authenticator.NewAuthenticator(ldapURL.Value(), ldapBaseDN, ldapUsername, ldapPassword, startTLS,
-						skipTLSVerify == 1, usersBaseDir, cacheTime, ldapSearchQuery, ldapGroupAttributes.Value(),
-						caCertificates.Value(), primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
-						requireGroupMembership, sftpgoUserRequirements)
+					config := &authenticator.Config{
+						DialURLs:               ldapURL.Value(),
+						BaseDN:                 ldapBaseDN,
+						Username:               ldapUsername,
+						Password:               ldapPassword,
+						StartTLS:               startTLS,
+						SkipTLSVerify:          skipTLSVerify == 1,
+						CACertificates:         caCertificates.Value(),
+						BaseDir:                usersBaseDir,
+						CacheTime:              cacheTime,
+						SearchQuery:            ldapSearchQuery,
+						GroupAttributes:        ldapGroupAttributes.Value(),
+						PrimaryGroupPrefix:     primaryGroupPrefix,
+						SecondaryGroupPrefix:   secondaryGroupPrefix,
+						MembershipGroupPrefix:  membershipGroupPrefix,
+						RequireGroups:          requireGroupMembership,
+						SFTPGoUserRequirements: sftpgoUserRequirements,
+					}
+					a, err := authenticator.NewAuthenticator(config)
 					if err != nil {
 						logger.AppLogger.Error("unable to create the authenticator", "err", err)
 						return err
