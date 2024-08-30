@@ -16,10 +16,14 @@ package authenticator
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sftpgo/sdk"
 
 	"github.com/sftpgo/sftpgo-plugin-auth/logger"
@@ -35,7 +39,7 @@ var (
 type Config struct {
 	DialURLs               []string `json:"dial_urls"`
 	BaseDN                 string   `json:"base_dn"`
-	Username               string   `json:"username"`
+	Username               string   `json:"bind_dn"`
 	Password               string   `json:"password"`
 	StartTLS               int      `json:"start_tls"`
 	SkipTLSVerify          bool     `json:"skip_tls_verify"`
@@ -94,4 +98,195 @@ func NewAuthenticator(config *Config) (*LDAPAuthenticator, error) {
 	logger.AppLogger.Info("authenticator created", "dial URLs", auth.DialURLs, "base dn", auth.BaseDN,
 		"search query", auth.SearchQuery)
 	return auth, nil
+}
+
+type multiAuthConfig struct {
+	LRUCacheSize int      `json:"cache_size"`
+	Configs      []Config `json:"configs"`
+}
+
+func NewMultiAuthenticator(configFile string) (*MultiAuthenticator, error) {
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read config file %q: %w", configFile, err)
+	}
+	var c multiAuthConfig
+	err = json.Unmarshal(data, &c)
+	if err != nil {
+		return nil, fmt.Errorf("invalid config file %q: %w", configFile, err)
+	}
+
+	if len(c.Configs) == 0 {
+		return nil, errors.New("no configurations defined")
+	}
+	if c.LRUCacheSize == 0 {
+		c.LRUCacheSize = 100
+	}
+
+	mapping, err := lru.New[string, int](c.LRUCacheSize)
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize users mapping: %w", err)
+	}
+	multiAuth := &MultiAuthenticator{
+		usersMapping: mapping,
+	}
+	for idx, c := range c.Configs {
+		auth, err := NewAuthenticator(&c)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create authenticator at index %d: %w", idx, err)
+		}
+		multiAuth.Authenticators = append(multiAuth.Authenticators, auth)
+	}
+
+	logger.AppLogger.Debug("multi authenticator initialized", "LDAP servers", len(c.Configs), "cache size", c.LRUCacheSize)
+	return multiAuth, nil
+}
+
+type MultiAuthenticator struct {
+	Authenticators []*LDAPAuthenticator
+	usersMapping   *lru.Cache[string, int]
+}
+
+func (m *MultiAuthenticator) getMappedIndex(username string) int {
+	if val, ok := m.usersMapping.Get(username); ok {
+		return val
+	}
+	return -1
+}
+
+func (m *MultiAuthenticator) addUserMapping(username string, idx int) {
+	m.usersMapping.Add(username, idx)
+	logger.AppLogger.Debug("user mapped to server", "username", username, "server number", idx+1)
+}
+
+func (m *MultiAuthenticator) CheckUserAndPass(username, password, ip, protocol string, userAsJSON []byte) ([]byte, error) {
+	var res []byte
+	var err error
+
+	cachedIdx := m.getMappedIndex(username)
+	if cachedIdx >= 0 {
+		res, err = m.Authenticators[cachedIdx].CheckUserAndPass(username, password, ip, protocol, userAsJSON)
+		if err == nil {
+			return res, nil
+		}
+	}
+
+	for idx := range m.Authenticators {
+		if idx == cachedIdx {
+			continue
+		}
+		res, err = m.Authenticators[idx].CheckUserAndPass(username, password, ip, protocol, userAsJSON)
+		if err == nil {
+			m.addUserMapping(username, idx)
+			return res, nil
+		}
+	}
+	return res, err
+}
+
+func (m *MultiAuthenticator) CheckUserAndTLSCert(username, tlsCert, ip, protocol string, userAsJSON []byte) ([]byte, error) {
+	var res []byte
+	var err error
+
+	cachedIdx := m.getMappedIndex(username)
+	if cachedIdx >= 0 {
+		res, err = m.Authenticators[cachedIdx].CheckUserAndTLSCert(username, tlsCert, ip, protocol, userAsJSON)
+		if err == nil {
+			return res, nil
+		}
+	}
+
+	for idx := range m.Authenticators {
+		if idx == cachedIdx {
+			continue
+		}
+		res, err = m.Authenticators[idx].CheckUserAndTLSCert(username, tlsCert, ip, protocol, userAsJSON)
+		if err == nil {
+			m.addUserMapping(username, idx)
+			return res, nil
+		}
+	}
+	return res, err
+}
+
+func (m *MultiAuthenticator) CheckUserAndPublicKey(username, pubKey, ip, protocol string, userAsJSON []byte) ([]byte, error) {
+	var res []byte
+	var err error
+
+	cachedIdx := m.getMappedIndex(username)
+	if cachedIdx >= 0 {
+		res, err = m.Authenticators[cachedIdx].CheckUserAndPublicKey(username, pubKey, ip, protocol, userAsJSON)
+		if err == nil {
+			return res, nil
+		}
+	}
+
+	for idx := range m.Authenticators {
+		if idx == cachedIdx {
+			continue
+		}
+		res, err = m.Authenticators[idx].CheckUserAndPublicKey(username, pubKey, ip, protocol, userAsJSON)
+		if err == nil {
+			m.addUserMapping(username, idx)
+			return res, nil
+		}
+	}
+	return res, err
+}
+
+func (m *MultiAuthenticator) CheckUserAndKeyboardInteractive(username, ip, protocol string, userAsJSON []byte) ([]byte, error) {
+	var res []byte
+	var err error
+
+	cachedIdx := m.getMappedIndex(username)
+	if cachedIdx >= 0 {
+		res, err = m.Authenticators[cachedIdx].CheckUserAndKeyboardInteractive(username, ip, protocol, userAsJSON)
+		if err == nil {
+			return res, err
+		}
+	}
+
+	for idx := range m.Authenticators {
+		if idx == cachedIdx {
+			continue
+		}
+		res, err = m.Authenticators[idx].CheckUserAndKeyboardInteractive(username, ip, protocol, userAsJSON)
+		if err == nil {
+			m.addUserMapping(username, idx)
+			return res, nil
+		}
+	}
+	return res, err
+}
+
+func (m *MultiAuthenticator) SendKeyboardAuthRequest(requestID, username, password, ip string, answers,
+	questions []string, step int32,
+) (string, []string, []bool, int, int, error) {
+	var instructions string
+	var quests []string
+	var echos []bool
+	var authResult, checkPassword int
+	var err error
+
+	cachedIdx := m.getMappedIndex(username)
+	if cachedIdx >= 0 {
+		instructions, quests, echos, authResult, checkPassword, err = m.Authenticators[cachedIdx].SendKeyboardAuthRequest(
+			requestID, username, password, ip, answers, questions, step)
+		if err == nil {
+			return instructions, quests, echos, authResult, checkPassword, nil
+		}
+	}
+
+	for idx := range m.Authenticators {
+		if idx == cachedIdx {
+			continue
+		}
+		instructions, quests, echos, authResult, checkPassword, err = m.Authenticators[idx].SendKeyboardAuthRequest(
+			requestID, username, password, ip, answers, questions, step)
+		if err == nil {
+			m.addUserMapping(username, idx)
+			return instructions, quests, echos, authResult, checkPassword, nil
+		}
+	}
+	return instructions, quests, echos, authResult, checkPassword, err
 }

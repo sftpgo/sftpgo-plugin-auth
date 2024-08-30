@@ -20,9 +20,9 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-plugin"
-	"github.com/sftpgo/sdk/plugin/auth"
 	"github.com/urfave/cli/v2"
 
+	"github.com/sftpgo/sdk/plugin/auth"
 	"github.com/sftpgo/sftpgo-plugin-auth/authenticator"
 	"github.com/sftpgo/sftpgo-plugin-auth/logger"
 )
@@ -66,6 +66,7 @@ var (
 	membershipGroupPrefix  string
 	requireGroupMembership bool
 	sftpgoUserRequirements int
+	configFile             string
 
 	rootCmd = &cli.App{
 		Name:    "sftpgo-plugin-auth",
@@ -178,27 +179,39 @@ var (
 						Destination: &caCertificates,
 						EnvVars:     []string{envPrefix + "CA_CERTIFICATES"},
 					},
+					&cli.StringFlag{
+						Name:        "config-file",
+						Usage:       "Defines the path to an optional JSON configuration file. The configuration file can be used to configure a list of LDAP servers, with different configurations, to be used in order until one works. If set the other configuration flags are ignored",
+						Destination: &configFile,
+						EnvVars:     []string{envPrefix + "CONFIG_FILE"},
+					},
 				},
 				Action: func(ctx *cli.Context) error {
-					config := &authenticator.Config{
-						DialURLs:               ldapURL.Value(),
-						BaseDN:                 ldapBaseDN,
-						Username:               ldapUsername,
-						Password:               ldapPassword,
-						StartTLS:               startTLS,
-						SkipTLSVerify:          skipTLSVerify == 1,
-						CACertificates:         caCertificates.Value(),
-						BaseDir:                usersBaseDir,
-						CacheTime:              cacheTime,
-						SearchQuery:            ldapSearchQuery,
-						GroupAttributes:        ldapGroupAttributes.Value(),
-						PrimaryGroupPrefix:     primaryGroupPrefix,
-						SecondaryGroupPrefix:   secondaryGroupPrefix,
-						MembershipGroupPrefix:  membershipGroupPrefix,
-						RequireGroups:          requireGroupMembership,
-						SFTPGoUserRequirements: sftpgoUserRequirements,
+					var a auth.Authenticator
+					var err error
+					if configFile != "" {
+						a, err = authenticator.NewMultiAuthenticator(configFile)
+					} else {
+						config := &authenticator.Config{
+							DialURLs:               ldapURL.Value(),
+							BaseDN:                 ldapBaseDN,
+							Username:               ldapUsername,
+							Password:               ldapPassword,
+							StartTLS:               startTLS,
+							SkipTLSVerify:          skipTLSVerify == 1,
+							CACertificates:         caCertificates.Value(),
+							BaseDir:                usersBaseDir,
+							CacheTime:              cacheTime,
+							SearchQuery:            ldapSearchQuery,
+							GroupAttributes:        ldapGroupAttributes.Value(),
+							PrimaryGroupPrefix:     primaryGroupPrefix,
+							SecondaryGroupPrefix:   secondaryGroupPrefix,
+							MembershipGroupPrefix:  membershipGroupPrefix,
+							RequireGroups:          requireGroupMembership,
+							SFTPGoUserRequirements: sftpgoUserRequirements,
+						}
+						a, err = authenticator.NewAuthenticator(config)
 					}
-					a, err := authenticator.NewAuthenticator(config)
 					if err != nil {
 						logger.AppLogger.Error("unable to create the authenticator", "err", err)
 						return err
@@ -210,8 +223,6 @@ var (
 						},
 						GRPCServer: plugin.DefaultGRPCServer,
 					})
-
-					a.Cleanup()
 					return errors.New("the plugin exited unexpectedly")
 				},
 			},

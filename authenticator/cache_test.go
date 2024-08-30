@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -118,4 +119,44 @@ func TestCleanup(t *testing.T) {
 	}, 500*time.Millisecond, 100*time.Millisecond)
 	stopCleanupTicker()
 	cache = nil
+}
+
+func TestLRUCache(t *testing.T) {
+	mapping, err := lru.New[string, int](2)
+	require.NoError(t, err)
+	ma := &MultiAuthenticator{
+		usersMapping: mapping,
+	}
+	user1 := "user1"
+	user2 := "user2"
+	user3 := "user3"
+	idx := ma.getMappedIndex(user1)
+	assert.Equal(t, -1, idx)
+	idx = ma.getMappedIndex(user2)
+	assert.Equal(t, -1, idx)
+	idx = ma.getMappedIndex(user3)
+	assert.Equal(t, -1, idx)
+	ma.usersMapping.Add(user1, 1)
+	assert.Equal(t, 1, ma.usersMapping.Len())
+	idx = ma.getMappedIndex(user1)
+	assert.Equal(t, 1, idx)
+	ma.usersMapping.Add(user2, 2)
+	idx = ma.getMappedIndex(user2)
+	assert.Equal(t, 2, idx)
+	ma.usersMapping.Add(user3, 3)
+	assert.Equal(t, 2, ma.usersMapping.Len())
+	idx = ma.getMappedIndex(user3)
+	assert.Equal(t, 3, idx)
+	idx = ma.getMappedIndex(user1)
+	assert.Equal(t, -1, idx)
+	idx = ma.getMappedIndex(user2)
+	assert.Equal(t, 2, idx)
+	ma.usersMapping.Add(user1, 11)
+	idx = ma.getMappedIndex(user1)
+	assert.Equal(t, 11, idx)
+	idx = ma.getMappedIndex(user2)
+	assert.Equal(t, 2, idx)
+	idx = ma.getMappedIndex(user3)
+	assert.Equal(t, -1, idx)
+	assert.Equal(t, 2, ma.usersMapping.Len())
 }

@@ -14,7 +14,7 @@ NAME:
    sftpgo-plugin-auth serve - Launch the SFTPGo plugin, it must be called from an SFTPGo instance
 
 USAGE:
-   sftpgo-plugin-auth serve [command options] [arguments...]
+   sftpgo-plugin-auth serve [command options]
 
 OPTIONS:
    --ldap-url value [ --ldap-url value ]                            LDAP url, e.g ldap://192.168.1.5:389 or ldaps://192.168.1.5:636. By specifying multiple URLs you will achieve load balancing and high availability [$SFTPGO_PLUGIN_AUTH_LDAP_URL]
@@ -33,6 +33,7 @@ OPTIONS:
    --cache-time value                                               Defines the cache time, in seconds, for authenticated users. 0 means no cache (default: 0) [$SFTPGO_PLUGIN_AUTH_CACHE_TIME]
    --skip-tls-verify value                                          If set to 1 the plugin accepts any TLS certificate presented by the server and any host name in that certificate. In this mode, TLS is susceptible to man-in-the-middle attacks. This should be used only for testing (default: 0) [$SFTPGO_PLUGIN_AUTH_SKIP_TLS_VERIFY]
    --ca-certificates value [ --ca-certificates value ]              List of absolute paths to extra CA certificates to trust [$SFTPGO_PLUGIN_AUTH_CA_CERTIFICATES]
+   --config-file value                                              Defines the path to an optional JSON configuration file. The configuration file can be used to configure a list of LDAP servers, with different configurations, to be used in order until one works. If set the other configuration flags are ignored [$SFTPGO_PLUGIN_AUTH_CONFIG_FILE]
    --help, -h                                                       show help
 ```
 
@@ -58,3 +59,59 @@ SFTPGO_PLUGINS__0__CMD="/usr/local/bin/sftpgo-plugin-auth"
 SFTPGO_PLUGINS__0__ARGS="serve"
 SFTPGO_PLUGINS__0__AUTO_MTLS=1
 ```
+
+Example configuration file.
+
+```json
+{
+    "cache_size": 100,
+    "configs": [
+        {
+            "dial_urls": [
+                "ldap://192.168.5.21:389"
+            ],
+            "base_dn": "dc=mydomain,dc=local",
+            "bind_dn": "cn=Administrator,cn=users,dc=mydomain,dc=local",
+            "password": "super secret",
+            "start_tls": 0,
+            "skip_tls_verify": false,
+            "ca_certificates": [],
+            "search_query": "(&(objectClass=user)(sAMAccountType=805306368)(sAMAccountName=%username%))",
+            "group_attributes": [
+                "memberOf"
+            ],
+            "primary_group_prefix": "",
+            "secondary_group_prefix": "",
+            "membership_group_prefix": "",
+            "require_groups": false,
+            "sftpgo_user_requirements": 0,
+            "base_dir": "",
+            "cache_time": 0
+        },
+        {
+            "dial_urls": [
+                "ldap://192.168.1.5:389"
+            ],
+            "base_dn": "dc=mylab,dc=local",
+            "bind_dn": "cn=Administrator,cn=users,dc=mylab,dc=local",
+            "password": "Password.123456",
+            "start_tls": 0,
+            "skip_tls_verify": false,
+            "ca_certificates": [],
+            "search_query": "(&(objectClass=user)(sAMAccountType=805306368)(sAMAccountName=%username%))",
+            "group_attributes": [
+                "memberOf"
+            ],
+            "primary_group_prefix": "",
+            "secondary_group_prefix": "",
+            "membership_group_prefix": "",
+            "require_groups": false,
+            "sftpgo_user_requirements": 0,
+            "base_dir": "",
+            "cache_time": 0
+        }
+    ]
+}
+```
+
+The `cache_size` configuration parameter defines the size of the LRU cache used to dynamically map users to LDAP servers.

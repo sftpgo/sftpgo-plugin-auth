@@ -88,7 +88,7 @@ func TestLDAPAuthenticator(t *testing.T) {
 	require.Error(t, err)
 	e, ok := err.(*ldap.Error)
 	require.True(t, ok)
-	require.Equal(t, uint16(49), e.ResultCode)
+	require.Equal(t, uint16(ldap.LDAPResultInvalidCredentials), e.ResultCode)
 	auth.SFTPGoUserRequirements = 1
 	_, err = auth.CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
 	require.Error(t, err)
@@ -111,7 +111,7 @@ func TestLDAPAuthenticator(t *testing.T) {
 	require.Error(t, err)
 	e, ok = err.(*ldap.Error)
 	require.True(t, ok)
-	require.Equal(t, uint16(49), e.ResultCode)
+	require.Equal(t, uint16(ldap.LDAPResultInvalidCredentials), e.ResultCode)
 	// auth ok
 	userJSON, err = auth.CheckUserAndPass(user1, password, "", "", userJSON)
 	require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestLDAPAuthenticator(t *testing.T) {
 	require.Error(t, err)
 	e, ok = err.(*ldap.Error)
 	require.True(t, ok)
-	require.Equal(t, uint16(49), e.ResultCode)
+	require.Equal(t, uint16(ldap.LDAPResultInvalidCredentials), e.ResultCode)
 	// empty password
 	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{""}, nil, 2)
 	require.ErrorIs(t, err, errInvalidCredentials)
@@ -157,7 +157,7 @@ func TestLDAPAuthenticator(t *testing.T) {
 	require.Error(t, err)
 	e, ok = err.(*ldap.Error)
 	require.True(t, ok)
-	require.Equal(t, uint16(49), e.ResultCode)
+	require.Equal(t, uint16(ldap.LDAPResultInvalidCredentials), e.ResultCode)
 	_, _, _, res, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{password}, nil, 2)
 	require.NoError(t, err)
 	require.Equal(t, 1, res)
@@ -488,6 +488,120 @@ func TestRetryableErrors(t *testing.T) {
 	}
 	require.False(t, a.isRetryableError(err))
 	require.False(t, a.isRetryableError(fs.ErrPermission))
+}
+
+func TestMultiAuthValidation(t *testing.T) {
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "config.json")
+	_, err := NewMultiAuthenticator(configFile)
+	require.ErrorIs(t, err, fs.ErrNotExist)
+	err = os.WriteFile(configFile, []byte("not a json"), 0666)
+	assert.NoError(t, err)
+	_, err = NewMultiAuthenticator(configFile)
+	require.ErrorContains(t, err, "invalid config file")
+
+	err = os.WriteFile(configFile, []byte(`{"configs":[]}`), 0666)
+	assert.NoError(t, err)
+	_, err = NewMultiAuthenticator(configFile)
+	require.ErrorContains(t, err, "no configurations defined")
+	err = os.WriteFile(configFile, []byte(`{"configs":[{}]}`), 0666)
+	assert.NoError(t, err)
+	_, err = NewMultiAuthenticator(configFile)
+	require.ErrorContains(t, err, "unable to create authenticator")
+
+	c := multiAuthConfig{
+		LRUCacheSize: 120,
+	}
+	c.Configs = append(c.Configs, *getConfig(ldapURL, baseDN, username, password, 0, false, "", 0, searchQuery,
+		nil, nil, "", "", "", false, 0))
+
+	data, err := json.Marshal(c)
+	require.NoError(t, err)
+	err = os.WriteFile(configFile, data, 0666)
+	assert.NoError(t, err)
+	_, err = NewMultiAuthenticator(configFile)
+	assert.NoError(t, err)
+}
+
+func TestMultiAuthenticators(t *testing.T) {
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "config.json")
+	c := multiAuthConfig{
+		LRUCacheSize: 120,
+	}
+	c.Configs = append(c.Configs, *getConfig([]string{"ldap://localhost:3898"}, baseDN, username, password, 0, false,
+		tempDir, 0, searchQuery, []string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix,
+		membershipGroupPrefix, true, 0))
+	c.Configs = append(c.Configs, *getConfig(ldapURL, baseDN, username, password, 0, false, tempDir, 0, searchQuery,
+		[]string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
+		true, 0))
+
+	data, err := json.Marshal(c)
+	require.NoError(t, err)
+	err = os.WriteFile(configFile, data, 0666)
+	assert.NoError(t, err)
+	auth, err := NewMultiAuthenticator(configFile)
+	require.NoError(t, err)
+
+	userJSON, err := auth.CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
+	require.NoError(t, err)
+	var user sdk.User
+	err = json.Unmarshal(userJSON, &user)
+	require.NoError(t, err)
+	require.Equal(t, 1, user.Status)
+	require.Equal(t, filepath.Join(tempDir, user1), user.HomeDir)
+	require.Len(t, user.Groups, 2)
+	// authenticate again, the cached node will be used directly
+	_, err = auth.CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
+	require.NoError(t, err)
+	// empty password
+	_, err = auth.CheckUserAndPass(user1, "", "", "", nil)
+	require.ErrorIs(t, err, errInvalidCredentials)
+	// wrong password
+	_, err = auth.CheckUserAndPass(user1, "wrong", "", "", nil)
+	require.Error(t, err)
+	e, ok := err.(*ldap.Error)
+	require.True(t, ok)
+	require.Equal(t, uint16(ldap.ErrorNetwork), e.ResultCode)
+	// auth with a different user
+	userJSON, err = auth.CheckUserAndPass(user2, password, "", "", []byte(`{"username":"user2"}`))
+	require.NoError(t, err)
+	user = sdk.User{}
+	err = json.Unmarshal(userJSON, &user)
+	require.NoError(t, err)
+	require.Equal(t, 1, user.Status)
+	require.Equal(t, filepath.Join(tempDir, user2), user.HomeDir)
+	require.Len(t, user.Groups, 1)
+	// test keyboard interactive authentication
+	_, err = auth.CheckUserAndKeyboardInteractive("missing user", "", "", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not exist")
+	userJSON, err = auth.CheckUserAndKeyboardInteractive(user1, "", "", userJSON)
+	require.NoError(t, err)
+	err = json.Unmarshal(userJSON, &user)
+	require.NoError(t, err)
+	require.Equal(t, 1, user.Status)
+	require.Len(t, user.Groups, 2)
+	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", nil, nil, 1)
+	require.NoError(t, err)
+	_, _, _, res, _, err := auth.SendKeyboardAuthRequest("", user1, "", "", []string{password}, nil, 2)
+	require.NoError(t, err)
+	require.Equal(t, 1, res)
+	// wrong password
+	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{"wrong"}, nil, 2)
+	require.Error(t, err)
+	e, ok = err.(*ldap.Error)
+	require.True(t, ok)
+	require.Equal(t, uint16(ldap.ErrorNetwork), e.ResultCode)
+	// no group
+	_, err = auth.CheckUserAndPass("serviceuser", password, "", "", []byte(`{"username":"serviceuser"}`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "users without group membership are not allowed")
+	// test unsupported methods
+	_, err = auth.CheckUserAndPublicKey(user2, "", "", "", nil)
+	require.ErrorIs(t, err, errNotImplemented)
+	_, err = auth.CheckUserAndTLSCert(user1, "", "", "", nil)
+	require.ErrorIs(t, err, errNotImplemented)
 }
 
 func getConfig(dialURLs []string, baseDN, username, password string, startTLS int, skipTLSVerify bool,
