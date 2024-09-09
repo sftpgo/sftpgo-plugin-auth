@@ -420,7 +420,7 @@ func (a *LDAPAuthenticator) isUserToUpdate(u *sdk.User, groups []sdk.GroupMappin
 		return false
 	}
 	if len(groups) != len(u.Groups) {
-		logger.AppLogger.Debug("groups to update", "user", u.Username)
+		logger.AppLogger.Debug("groups to update", "user", u.Username, "groups", groups)
 		return true
 	}
 	for _, g := range groups {
