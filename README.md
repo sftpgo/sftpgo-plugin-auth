@@ -1,6 +1,6 @@
 # SFTPGo auth plugin
 
-![CI](https://github.com/sftpgo/sftpgo-plugin-auth/workflows/CI/badge.svg?branch=main&event=push)
+![CI](https://github.com/sftpgo/sftpgo-plugin-auth/workflows/CI/badge.svg)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 This plugin enables LDAP/Active Directory authentication for SFTPGo.

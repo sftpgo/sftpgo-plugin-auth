@@ -4,6 +4,10 @@ on:
   push:
     tags: 'v*'
 
+permissions:
+  id-token: write
+  contents: write
+
 env:
   GO_VERSION: 1.23.3
 
@@ -24,8 +28,6 @@ jobs:
 
       - name: Build
         run: |
-          sudo apt-get update -q -y
-          sudo apt-get install -q -y osslsigncode
           go install github.com/tc-hib/go-winres@latest
 
           VERSION=${GITHUB_REF/refs\/tags\//}
@@ -33,17 +35,13 @@ jobs:
           FILE_VERSION=${VERSION:1}.0
 
           mkdir bin
+          mkdir win
           go-winres simply --arch amd64 --product-version $VERSION-$GIT_COMMIT --file-version $FILE_VERSION --file-description "SFTPGo plugin auth" --product-name "SFTPGo plugin auth" --copyright "AGPL-3.0" --original-filename sftpgo-plugin-auth-windows-x86_64.exe --icon res/icon.ico
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o sftpgo-plugin-auth-windows-x86_64.exe
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o win/sftpgo-plugin-auth-windows-x86_64.exe
           go-winres simply --arch arm64 --product-version $VERSION-$GIT_COMMIT --file-version $FILE_VERSION --file-description "SFTPGo plugin auth" --product-name "SFTPGo plugin auth" --copyright "AGPL-3.0" --original-filename sftpgo-plugin-auth-windows-arm64.exe --icon res/icon.ico
-          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o sftpgo-plugin-auth-windows-arm64.exe
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o win/sftpgo-plugin-auth-windows-arm64.exe
           go-winres simply --arch 386 --product-version $VERSION-$GIT_COMMIT --file-version $FILE_VERSION --file-description "SFTPGo plugin auth" --product-name "SFTPGo plugin auth" --copyright "AGPL-3.0" --original-filename sftpgo-plugin-auth-windows-x86.exe --icon res/icon.ico
-          CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o sftpgo-plugin-auth-windows-x86.exe
-          echo $CERT_DATA | base64 --decode > cert.pfx
-          osslsigncode sign -pkcs12 cert.pfx -pass $CERT_PASS -n "SFTPGo plugin auth" -i "https://github.com/sftpgo/sftpgo-plugin-auth" -ts "http://timestamp.sectigo.com" -h sha2 -in sftpgo-plugin-auth-windows-x86_64.exe -out bin/sftpgo-plugin-auth-windows-x86_64.exe
-          osslsigncode sign -pkcs12 cert.pfx -pass $CERT_PASS -n "SFTPGo plugin auth" -i "https://github.com/sftpgo/sftpgo-plugin-auth" -ts "http://timestamp.sectigo.com" -h sha2 -in sftpgo-plugin-auth-windows-arm64.exe -out bin/sftpgo-plugin-auth-windows-arm64.exe
-          osslsigncode sign -pkcs12 cert.pfx -pass $CERT_PASS -n "SFTPGo plugin auth" -i "https://github.com/sftpgo/sftpgo-plugin-auth" -ts "http://timestamp.sectigo.com" -h sha2 -in sftpgo-plugin-auth-windows-x86.exe -out bin/sftpgo-plugin-auth-windows-x86.exe
-          rm -f cert.pfx *.exe *.syso
+          CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o win/sftpgo-plugin-auth-windows-x86.exe
 
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-linux-amd64
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-linux-arm64
@@ -52,16 +50,20 @@ jobs:
           CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-darwin-amd64
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/sftpgo/sftpgo-plugin-auth/cmd.commitHash=`git describe --always --dirty` -X github.com/sftpgo/sftpgo-plugin-auth/cmd.buildDate=`date -u +%FT%TZ`" -o bin/sftpgo-plugin-auth-darwin-arm64
         shell: bash
-        env:
-          CERT_DATA: ${{ secrets.CERT_DATA }}
-          CERT_PASS: ${{ secrets.CERT_PASS }}
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: win
+          path: win
+          retention-days: 1
 
       - name: Prepare vendored sources
         run: |
           VERSION=${GITHUB_REF/refs\/tags\//}
           go mod vendor
           echo "${VERSION}" > VERSION.txt
-          tar --exclude=bin -cJvf sftpgo-plugin-auth_${VERSION}_src_with_deps.tar.xz *
+          tar --exclude=bin --exclude=win -cJvf sftpgo-plugin-auth_${VERSION}_src_with_deps.tar.xz *
 
       - name: Create release
         run: |
@@ -70,5 +72,63 @@ jobs:
           gh release upload "${VERSION}" bin/* --clobber
           gh release upload "${VERSION}" sftpgo-plugin-auth_${VERSION}_src_with_deps.tar.xz --clobber
           gh release view "${VERSION}"
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+  release-windows-binaries:
+    name: Release Windows binaries
+    environment: signing
+    needs: [build]
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: win
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          endpoint: https://eus.codesigning.azure.net/
+          trusted-signing-account-name: nicola
+          certificate-profile-name: SFTPGo
+          files: |
+            ${{ github.workspace }}\sftpgo-plugin-auth-windows-x86_64.exe
+            ${{ github.workspace }}\sftpgo-plugin-auth-windows-arm64.exe
+            ${{ github.workspace }}\sftpgo-plugin-auth-windows-x86.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+          exclude-shared-token-cache-credential: true
+          exclude-visual-studio-credential: true
+          exclude-visual-studio-code-credential: true
+          exclude-azure-cli-credential: false
+          exclude-azure-powershell-credential: true
+          exclude-azure-developer-cli-credential: true
+          exclude-interactive-browser-credential: true
+
+      - name: Upload to release
+        run: |
+          VERSION=${GITHUB_REF/refs\/tags\//}
+          gh release upload "${VERSION}" sftpgo-plugin-auth-windows-x86_64.exe
+          gh release upload "${VERSION}" sftpgo-plugin-auth-windows-arm64.exe
+          gh release upload "${VERSION}" sftpgo-plugin-auth-windows-x86.exe
+          gh release view "${VERSION}"
+        shell: bash
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
