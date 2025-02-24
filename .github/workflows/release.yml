@@ -99,7 +99,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Sign
-        uses: azure/trusted-signing-action@v0.5.0
+        uses: azure/trusted-signing-action@v0.5.1
         with:
           endpoint: https://eus.codesigning.azure.net/
           trusted-signing-account-name: nicola
