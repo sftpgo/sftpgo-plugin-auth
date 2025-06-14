@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: '1.23'
+  GO_VERSION: '1.24'
 
 jobs:
   build:
@@ -126,7 +126,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
 
       - name: Run tests
         run: |
@@ -144,7 +144,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
       - uses: actions/checkout@v4
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
