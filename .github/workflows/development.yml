@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -73,7 +73,7 @@ jobs:
 
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: sftpgo-plugin-auth
           path: ${{ github.workspace }}/bin
@@ -86,7 +86,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Sign
-        uses: azure/trusted-signing-action@v0.5.1
+        uses: azure/trusted-signing-action@v0.5.9
         with:
           endpoint: https://eus.codesigning.azure.net/
           trusted-signing-account-name: nicola
@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -145,7 +145,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
