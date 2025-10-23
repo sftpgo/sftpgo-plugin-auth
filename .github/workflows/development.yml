@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.25'
 
 jobs:
   build:
@@ -64,58 +64,6 @@ jobs:
           name: sftpgo-plugin-auth
           path: bin
 
-  sign-windows-binaries:
-    name: Sign Windows binaries
-    if: ${{ github.event_name != 'pull_request' }}
-    environment: signing
-    needs: [build]
-    runs-on: windows-latest
-
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v5
-        with:
-          name: sftpgo-plugin-auth
-          path: ${{ github.workspace }}/bin
-
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Sign
-        uses: azure/trusted-signing-action@v0.5.9
-        with:
-          endpoint: https://eus.codesigning.azure.net/
-          trusted-signing-account-name: nicola
-          certificate-profile-name: SFTPGo
-          files: |
-            ${{ github.workspace }}\bin\sftpgo-plugin-auth-windows-x86_64.exe
-            ${{ github.workspace }}\bin\sftpgo-plugin-auth-windows-arm64.exe
-            ${{ github.workspace }}\bin\sftpgo-plugin-auth-windows-x86.exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-          exclude-environment-credential: true
-          exclude-workload-identity-credential: true
-          exclude-managed-identity-credential: true
-          exclude-shared-token-cache-credential: true
-          exclude-visual-studio-credential: true
-          exclude-visual-studio-code-credential: true
-          exclude-azure-cli-credential: false
-          exclude-azure-powershell-credential: true
-          exclude-azure-developer-cli-credential: true
-          exclude-interactive-browser-credential: true
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sftpgo-plugin-auth
-          path: bin
-          overwrite: true
-
   test:
     name: Run test cases
     runs-on: ubuntu-latest
@@ -126,7 +74,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Run tests
         run: |
@@ -144,7 +92,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
       - uses: actions/checkout@v5
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
