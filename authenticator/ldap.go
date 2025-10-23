@@ -175,7 +175,7 @@ func (a *LDAPAuthenticator) monitorDialURLs() {
 		if !a.isDialURLActive(u) {
 			conn, err := a.getLDAPConnection(u)
 			if err == nil {
-				conn.Close()
+				conn.Close() //nolint:errcheck
 				a.addActiveDialURL(u)
 			}
 		}
@@ -200,7 +200,7 @@ func (a *LDAPAuthenticator) CheckUserAndPass(username, password, _, _ string, us
 	if err != nil {
 		return nil, err
 	}
-	defer l.Close()
+	defer l.Close() //nolint:errcheck
 
 	entry, err := a.searchUser(l, username)
 	if err != nil {
@@ -237,7 +237,7 @@ func (a *LDAPAuthenticator) CheckUserAndKeyboardInteractive(username, _, _ strin
 	if err != nil {
 		return nil, err
 	}
-	defer l.Close()
+	defer l.Close() //nolint:errcheck
 
 	entry, err := a.searchUser(l, username)
 	if err != nil {
@@ -274,7 +274,7 @@ func (a *LDAPAuthenticator) SendKeyboardAuthRequest(requestID, username, _, _ st
 		if err != nil {
 			return "", nil, nil, 0, 0, err
 		}
-		defer l.Close()
+		defer l.Close() //nolint:errcheck
 
 		entry, err := a.searchUser(l, username)
 		if err != nil {
@@ -465,7 +465,7 @@ func (a *LDAPAuthenticator) getLDAPConnection(dialURL string) (*ldap.Conn, error
 	}
 	if a.StartTLS == 1 {
 		if err := l.StartTLS(a.tlsConfig); err != nil {
-			l.Close()
+			l.Close() //nolint:errcheck
 			return nil, err
 		}
 	}
