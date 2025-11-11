@@ -293,17 +293,6 @@ func (a *LDAPAuthenticator) SendKeyboardAuthRequest(requestID, username, _, _ st
 }
 
 func (a *LDAPAuthenticator) searchUser(l *ldap.Conn, username string) (*ldap.Entry, error) {
-	if a.Password == "" {
-		if err := l.UnauthenticatedBind(a.Username); err != nil {
-			logger.AppLogger.Debug("unable to bind to the directory server in anonymous mode", "err", err)
-			return nil, err
-		}
-	} else {
-		if err := l.Bind(a.Username, a.Password); err != nil {
-			logger.AppLogger.Debug("unable to bind to the directory server", "err", err)
-			return nil, err
-		}
-	}
 	attributes := append([]string{"dn"}, a.GroupAttributes...)
 	searchRequest := ldap.NewSearchRequest(a.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.DerefInSearching, 0, 0, false,
@@ -454,6 +443,21 @@ func (a *LDAPAuthenticator) connect() (conn *ldap.Conn, err error) {
 	return
 }
 
+func (a *LDAPAuthenticator) bind(l *ldap.Conn) error {
+	if a.Password == "" {
+		if err := l.UnauthenticatedBind(a.Username); err != nil {
+			logger.AppLogger.Debug("unable to bind to the directory server in anonymous mode", "err", err)
+			return err
+		}
+		return nil
+	}
+	if err := l.Bind(a.Username, a.Password); err != nil {
+		logger.AppLogger.Debug("unable to bind to the directory server", "err", err)
+		return err
+	}
+	return nil
+}
+
 func (a *LDAPAuthenticator) getLDAPConnection(dialURL string) (*ldap.Conn, error) {
 	opts := []ldap.DialOpt{
 		ldap.DialWithDialer(&net.Dialer{Timeout: 15 * time.Second}),
@@ -469,7 +473,12 @@ func (a *LDAPAuthenticator) getLDAPConnection(dialURL string) (*ldap.Conn, error
 			return nil, err
 		}
 	}
-	return l, err
+	l.SetTimeout(15 * time.Second)
+	if err := a.bind(l); err != nil {
+		l.Close() //nolint:errcheck
+		return nil, err
+	}
+	return l, nil
 }
 
 func (*LDAPAuthenticator) isRetryableError(err error) bool {
