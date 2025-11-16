@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	version   = "1.0.12"
+	version   = "1.0.13"
 	envPrefix = "SFTPGO_PLUGIN_AUTH_"
 )
 
