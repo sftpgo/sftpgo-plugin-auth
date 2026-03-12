@@ -59,7 +59,7 @@ jobs:
         shell: bash
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sftpgo-plugin-auth
           path: bin
