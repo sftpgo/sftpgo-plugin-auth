@@ -472,22 +472,26 @@ func TestLDAPMonitor(t *testing.T) {
 	assert.Len(t, auth.getDialURLs(), 2)
 }
 
-func TestRetryableErrors(t *testing.T) {
-	a := LDAPAuthenticator{}
-	require.False(t, a.isRetryableError(nil))
+func TestConnectFailover(t *testing.T) {
+	auth, err := NewAuthenticator(getConfig([]string{"ldap://localhost:3892", "ldap://localhost:3893"}, baseDN,
+		username, password, 0, true, "", 0, searchQuery, []string{groupAttribute}, nil, primaryGroupPrefix,
+		secondaryGroupPrefix, membershipGroupPrefix, false, 0))
+	require.NoError(t, err)
+	defer auth.Cleanup()
 
-	err := &ldap.Error{
-		Err:        errNotImplemented,
-		ResultCode: ldap.ErrorNetwork,
-	}
-	require.True(t, a.isRetryableError(err))
+	l, err := auth.connect()
+	require.NoError(t, err)
+	err = l.Close()
+	require.NoError(t, err)
 
-	err = &ldap.Error{
-		Err:        errNotImplemented,
-		ResultCode: ldap.ErrorUnexpectedMessage,
-	}
-	require.False(t, a.isRetryableError(err))
-	require.False(t, a.isRetryableError(fs.ErrPermission))
+	auth, err = NewAuthenticator(getConfig([]string{"ldap://localhost:3891", "ldap://localhost:3892"}, baseDN,
+		username, password, 0, true, "", 0, searchQuery, []string{groupAttribute}, nil, primaryGroupPrefix,
+		secondaryGroupPrefix, membershipGroupPrefix, false, 0))
+	require.NoError(t, err)
+	defer auth.Cleanup()
+
+	_, err = auth.connect()
+	require.Error(t, err)
 }
 
 func TestMultiAuthValidation(t *testing.T) {

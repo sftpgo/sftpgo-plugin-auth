@@ -433,14 +433,11 @@ func (a *LDAPAuthenticator) connect() (conn *ldap.Conn, err error) {
 		conn, err = a.getLDAPConnection(url)
 		if err == nil {
 			a.addActiveDialURL(url)
-		} else {
-			a.removeActiveDialURL(url, err)
+			return conn, nil
 		}
-		if !a.isRetryableError(err) {
-			return
-		}
+		a.removeActiveDialURL(url, err)
 	}
-	return
+	return conn, err
 }
 
 func (a *LDAPAuthenticator) bind(l *ldap.Conn) error {
@@ -479,17 +476,6 @@ func (a *LDAPAuthenticator) getLDAPConnection(dialURL string) (*ldap.Conn, error
 		return nil, err
 	}
 	return l, nil
-}
-
-func (*LDAPAuthenticator) isRetryableError(err error) bool {
-	if err == nil {
-		return false
-	}
-	var ldapErr *ldap.Error
-	if errors.As(err, &ldapErr) {
-		return ldapErr.ResultCode == ldap.ErrorNetwork
-	}
-	return false
 }
 
 func (a *LDAPAuthenticator) stopMonitorTicker() {
