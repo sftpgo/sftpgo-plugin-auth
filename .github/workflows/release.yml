@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: 1.25.10
+  GO_VERSION: 1.25.11
 
 jobs:
   build:
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
