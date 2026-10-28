@@ -100,25 +100,21 @@ func TestCache(t *testing.T) {
 }
 
 func TestCleanup(t *testing.T) {
-	cache = &authCache{
-		cacheTime: 2,
-		cache:     make(map[string]cachedUser),
-	}
-	cache.Add("1", "1")
+	c := newAuthCache(2)
+	c.Add("1", "1")
 	time.Sleep(2 * time.Second)
-	cache.Add("2", "2")
-	startCleanupTicker(20 * time.Millisecond)
+	c.Add("2", "2")
+	c.startCleanupTicker(20 * time.Millisecond)
 	assert.Eventually(t, func() bool {
-		if !cache.Has("2") {
+		if !c.Has("2") {
 			return false
 		}
-		cache.mu.RLock()
-		defer cache.mu.RUnlock()
+		c.mu.RLock()
+		defer c.mu.RUnlock()
 
-		return len(cache.cache) == 1
+		return len(c.cache) == 1
 	}, 500*time.Millisecond, 100*time.Millisecond)
-	stopCleanupTicker()
-	cache = nil
+	c.stopCleanupTicker()
 }
 
 func TestLRUCache(t *testing.T) {

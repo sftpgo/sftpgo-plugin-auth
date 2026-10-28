@@ -88,11 +88,8 @@ func NewAuthenticator(config *Config) (*LDAPAuthenticator, error) {
 			logger.AppLogger.Warn("user caching cannot be enabled when groups are defined, continuing without caching")
 		} else {
 			logger.AppLogger.Info("enable users caching", "cache time (sec)", config.CacheTime)
-			cache = &authCache{
-				cacheTime: config.CacheTime,
-				cache:     make(map[string]cachedUser),
-			}
-			startCleanupTicker(10 * time.Minute)
+			auth.cache = newAuthCache(config.CacheTime)
+			auth.cache.startCleanupTicker(10 * time.Minute)
 		}
 	}
 	logger.AppLogger.Info("authenticator created", "dial URLs", auth.DialURLs, "base dn", auth.BaseDN,

@@ -173,10 +173,8 @@ func TestAuthFromCache(t *testing.T) {
 		nil, nil, "", "", "", false, 0))
 	require.NoError(t, err)
 	require.Nil(t, auth.tlsConfig.RootCAs)
-
-	defer func() {
-		cache = nil
-	}()
+	require.NotNil(t, auth.cache)
+	defer auth.cache.stopCleanupTicker()
 
 	userJSON, err := auth.CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
 	require.NoError(t, err)
@@ -214,17 +212,17 @@ func TestAuthFromCache(t *testing.T) {
 	// empty password
 	_, _, _, _, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{""}, nil, 2)
 	require.ErrorIs(t, err, errInvalidCredentials)
-	found := cache.Has(user1)
+	found := auth.cache.Has(user1)
 	require.True(t, found)
 	// wait for cache expiration
 	time.Sleep(2100 * time.Millisecond)
-	found = cache.Has(user1)
+	found = auth.cache.Has(user1)
 	require.False(t, found)
 	// keyboard interactive auth with no cache
 	_, _, _, res, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{password}, nil, 2)
 	require.NoError(t, err)
 	require.Equal(t, 1, res)
-	found = cache.Has(user1)
+	found = auth.cache.Has(user1)
 	require.True(t, found)
 	// keyboard interactive auth from cache
 	_, _, _, res, _, err = auth.SendKeyboardAuthRequest("", user1, "", "", []string{password}, nil, 2)
@@ -606,6 +604,41 @@ func TestMultiAuthenticators(t *testing.T) {
 	require.ErrorIs(t, err, errNotImplemented)
 	_, err = auth.CheckUserAndTLSCert(user1, "", "", "", nil)
 	require.ErrorIs(t, err, errNotImplemented)
+}
+
+func TestMultiAuthenticatorsCache(t *testing.T) {
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "config.json")
+	c := multiAuthConfig{}
+	c.Configs = append(c.Configs, *getConfig(ldapURL, baseDN, username, password, 0, false, tempDir, 60,
+		searchQuery, nil, nil, "", "", "", false, 0))
+	c.Configs = append(c.Configs, *getConfig(ldapURL, baseDN, username, password, 0, false, tempDir, 60,
+		searchQuery, []string{groupAttribute}, nil, primaryGroupPrefix, secondaryGroupPrefix, membershipGroupPrefix,
+		true, 0))
+	data, err := json.Marshal(c)
+	require.NoError(t, err)
+	err = os.WriteFile(configFile, data, 0666)
+	require.NoError(t, err)
+	auth, err := NewMultiAuthenticator(configFile)
+	require.NoError(t, err)
+	require.Len(t, auth.Authenticators, 2)
+	require.NotNil(t, auth.Authenticators[0].cache)
+	defer auth.Authenticators[0].cache.stopCleanupTicker()
+	require.Nil(t, auth.Authenticators[1].cache)
+
+	_, err = auth.Authenticators[0].CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
+	require.NoError(t, err)
+	require.True(t, auth.Authenticators[0].cache.Has(user1))
+	// the directory with group mapping does not use the cache of the other one
+	_, err = auth.Authenticators[1].CheckUserAndPass(user1, "wrong", "", "", nil)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, errInvalidCredentials)
+	userJSON, err := auth.Authenticators[1].CheckUserAndPass(user1, password, "", "", []byte(`{"username":"user1"}`))
+	require.NoError(t, err)
+	var user sdk.User
+	err = json.Unmarshal(userJSON, &user)
+	require.NoError(t, err)
+	require.Len(t, user.Groups, 2)
 }
 
 func getConfig(dialURLs []string, baseDN, username, password string, startTLS int, skipTLSVerify bool,

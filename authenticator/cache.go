@@ -21,12 +21,6 @@ import (
 	"github.com/sftpgo/sftpgo-plugin-auth/logger"
 )
 
-var (
-	cache         *authCache
-	cleanupTicker *time.Ticker
-	cleanupDone   chan bool
-)
-
 type cachedUser struct {
 	username string
 	password string
@@ -34,9 +28,18 @@ type cachedUser struct {
 }
 
 type authCache struct {
-	cacheTime int
-	mu        sync.RWMutex
-	cache     map[string]cachedUser
+	cacheTime     int
+	mu            sync.RWMutex
+	cache         map[string]cachedUser
+	cleanupTicker *time.Ticker
+	cleanupDone   chan bool
+}
+
+func newAuthCache(cacheTime int) *authCache {
+	return &authCache{
+		cacheTime: cacheTime,
+		cache:     make(map[string]cachedUser),
+	}
 }
 
 func (c *authCache) Add(username, password string) {
@@ -114,27 +117,27 @@ func (c *authCache) cleanup() {
 	logger.AppLogger.Debug("cleanup cache finished", "size", len(c.cache))
 }
 
-func startCleanupTicker(duration time.Duration) {
-	stopCleanupTicker()
-	cleanupTicker = time.NewTicker(duration)
-	cleanupDone = make(chan bool)
+func (c *authCache) startCleanupTicker(duration time.Duration) {
+	c.stopCleanupTicker()
+	c.cleanupTicker = time.NewTicker(duration)
+	c.cleanupDone = make(chan bool)
 
-	go func() {
+	go func(ticker *time.Ticker, done chan bool) {
 		for {
 			select {
-			case <-cleanupDone:
+			case <-done:
 				return
-			case <-cleanupTicker.C:
-				cache.cleanup()
+			case <-ticker.C:
+				c.cleanup()
 			}
 		}
-	}()
+	}(c.cleanupTicker, c.cleanupDone)
 }
 
-func stopCleanupTicker() {
-	if cleanupTicker != nil {
-		cleanupTicker.Stop()
-		cleanupDone <- true
-		cleanupTicker = nil
+func (c *authCache) stopCleanupTicker() {
+	if c.cleanupTicker != nil {
+		c.cleanupTicker.Stop()
+		c.cleanupDone <- true
+		c.cleanupTicker = nil
 	}
 }

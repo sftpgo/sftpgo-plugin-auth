@@ -49,6 +49,7 @@ type LDAPAuthenticator struct {
 	tlsConfig              *tls.Config
 	monitorTicker          *time.Ticker
 	cleanupDone            chan bool
+	cache                  *authCache
 	mu                     sync.RWMutex
 	activeURLs             []string
 }
@@ -186,8 +187,8 @@ func (a *LDAPAuthenticator) CheckUserAndPass(username, password, _, _ string, us
 	if password == "" {
 		return nil, errInvalidCredentials
 	}
-	if cache != nil {
-		found, match := cache.Check(username, password)
+	if a.cache != nil {
+		found, match := a.cache.Check(username, password)
 		if found {
 			if match {
 				logger.AppLogger.Debug("password auth ok from cache", "user", username)
@@ -213,8 +214,8 @@ func (a *LDAPAuthenticator) CheckUserAndPass(username, password, _, _ string, us
 	if err != nil {
 		return nil, err
 	}
-	if cache != nil {
-		cache.Add(username, password)
+	if a.cache != nil {
+		a.cache.Add(username, password)
 	}
 	return result, nil
 }
@@ -228,8 +229,8 @@ func (a *LDAPAuthenticator) CheckUserAndPublicKey(_, _, _, _ string, _ []byte) (
 }
 
 func (a *LDAPAuthenticator) CheckUserAndKeyboardInteractive(username, _, _ string, userAsJSON []byte) ([]byte, error) {
-	if cache != nil {
-		if cache.Has(username) {
+	if a.cache != nil {
+		if a.cache.Has(username) {
 			return nil, nil
 		}
 	}
@@ -260,8 +261,8 @@ func (a *LDAPAuthenticator) SendKeyboardAuthRequest(requestID, username, _, _ st
 		if password == "" {
 			return "", nil, nil, 0, 0, errInvalidCredentials
 		}
-		if cache != nil {
-			found, match := cache.Check(username, password)
+		if a.cache != nil {
+			found, match := a.cache.Check(username, password)
 			if found {
 				if match {
 					logger.AppLogger.Debug("keyboard interactive password auth ok from cache", "user", username)
@@ -283,8 +284,8 @@ func (a *LDAPAuthenticator) SendKeyboardAuthRequest(requestID, username, _, _ st
 		if err := l.Bind(entry.DN, password); err != nil {
 			return "", nil, nil, 0, 0, err
 		}
-		if cache != nil {
-			cache.Add(username, password)
+		if a.cache != nil {
+			a.cache.Add(username, password)
 		}
 		return "", nil, nil, 1, 0, nil
 	default:
